@@ -1,1 +1,9 @@
+# virtual envionment files
+venv/**
+venv/
 
+# migration files
+**/migrations/**
+
+# other stuff
+**.json
