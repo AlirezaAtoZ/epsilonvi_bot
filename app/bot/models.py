@@ -68,12 +68,11 @@ class Message(models.Model):
         return output
 
 
+class StateMessage(models.Model):
+    text = None
 
-class Message(models.Model):
-    text = models.TextField()
 
-
-class InlineKeyboard(models.Model):
+class StateInlineKeyboard(models.Model):
     layout = None
 
 
