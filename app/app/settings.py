@@ -15,11 +15,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+PARENT_DIR = BASE_DIR.parent
 
+load_dotenv(dotenv_path=os.path.join(PARENT_DIR, '.env'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-@1j01@7t=1^3u5&$xcaaejztv6yb!$lkth+_fr%9l6o8qzq=(s
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost']
+ALLOWED_HOSTS = ['epsilonvi.ir', 'www.epsilonvi.ir']
 
 
 # Application definition
