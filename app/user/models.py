@@ -24,8 +24,8 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    telegram_id = models.CharField(_('telegram ID'), max_length=32, unique=True)
-    name = models.CharField(_('full name'), max_length=64, blank=True, null=True)
+    telegram_id = models.CharField(_('telegram ID'), max_length=64, unique=True)
+    name = models.TextField(_('full name'), blank=True, null=True)
 
     is_active = models.BooleanField(default=True)
     is_superuser = models.BooleanField(default=False)

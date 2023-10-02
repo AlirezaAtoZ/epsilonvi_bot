@@ -42,6 +42,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'user',
+    'bot',
+    'epsilonvi_bot',
 ]
 
 AUTH_USER_MODEL = 'user.User'
