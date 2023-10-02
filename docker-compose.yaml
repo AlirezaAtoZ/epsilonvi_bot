@@ -31,9 +31,11 @@ services:
       - type: bind
         source: "~/Django/epsilonvi_bot/app/"
         target: "/app"
+      - ".env:/app/.env"
     depends_on:
       - db
 
 volumes:
   # app:
   data:
+  .env:
