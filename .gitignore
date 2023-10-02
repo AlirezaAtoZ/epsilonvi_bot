@@ -5,5 +5,11 @@ venv/
 # migration files
 **/migrations/**
 
+# python
+**/__pycache__/**
+**/tmp/**
+
 # other stuff
 **.json
+stderr.log
+

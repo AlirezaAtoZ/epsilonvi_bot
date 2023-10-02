@@ -38,7 +38,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD = "telegram_id"
 
     def __str__(self) -> str:
-        return self.name + " " + self.telegram_id
+        return str(self.name) + " " + str(self.telegram_id)
 
     @property
     def is_staff(self):
