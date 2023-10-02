@@ -20,5 +20,5 @@ from epsilonvi_bot import views as eps_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('bot-webhook-63af1eda-28f9-4f21-b8df-fb73453f9892', eps_views.save_message, name='bot-webhook'),
+    path('bot-webhook-63af1eda-28f9-4f21-b8df-fb73453f9892', eps_views.webhook, name='bot-webhook'),
 ]

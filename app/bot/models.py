@@ -66,3 +66,37 @@ class Message(models.Model):
         elif self.caption: output += str(self.caption)
         else: output += "no text provided"
         return output
+
+
+
+class Message(models.Model):
+    text = models.TextField()
+
+
+class InlineKeyboard(models.Model):
+    layout = None
+
+
+class State(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+    # only when input is the keyboard
+    next_state = models.ForeignKey("State", on_delete=models.DO_NOTHING, null=True, blank=True)
+    message = models.ForeignKey("Message", on_delete=models.DO_NOTHING, null=True, blank=True)
+    inline_keyboard = models.ForeignKey("InlineKeyboard",  on_delete=models.DO_NOTHING, null=True, blank=True)
+    ROLES = [
+        ('UNIDF', 'unidentified'),
+        ('ADMIN', 'admin'),
+        ('SUADM', 'super admin'),
+        ('TCHER', 'teacher'),
+        ('STDNT', 'student'),
+    ]
+    role = models.CharField(max_length=5, choices=ROLES, default='UNIDF')
+
+    def __str__(self) -> str:
+        return f'{self.role} {self.name}'
+
+
+class UserState(models.Model):
+    user = models.ForeignKey(user_models.User, on_delete=models.DO_NOTHING)
+    state = models.ForeignKey(State, on_delete=models.DO_NOTHING)
+    
