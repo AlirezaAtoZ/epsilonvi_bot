@@ -80,8 +80,8 @@ class State(models.Model):
     name = models.CharField(max_length=64, unique=True)
     # only when input is the keyboard
     next_state = models.ForeignKey("State", on_delete=models.DO_NOTHING, null=True, blank=True)
-    message = models.ForeignKey("Message", on_delete=models.DO_NOTHING, null=True, blank=True)
-    inline_keyboard = models.ForeignKey("InlineKeyboard",  on_delete=models.DO_NOTHING, null=True, blank=True)
+    message = models.ForeignKey("StateInlineKeyboard", on_delete=models.DO_NOTHING, null=True, blank=True)
+    inline_keyboard = models.ForeignKey("StateInlineKeyboard",  on_delete=models.DO_NOTHING, null=True, blank=True)
     ROLES = [
         ('UNIDF', 'unidentified'),
         ('ADMIN', 'admin'),
