@@ -14,10 +14,10 @@ class Command(BaseCommand):
     set_webhook_url = f'https://api.telegram.org/bot{os.environ.get("EPSILONVI_DEV_BOT_TOKEN")}/setWebhook'
     params = {
 	'url': webhook_url,
-	'X-Telegram-Bot-Api-Secret-Token': secret_token}
+	'secret_token': secret_token}
 
     def handle(self, *args: Any, **options: Any):
-        res = requests.get(url=self.set_webhook_url, params=self.params)
+        res = requests.post(url=self.set_webhook_url, params=self.params)
         
         if not res.ok:
             raise CommandError(str(res.json()))

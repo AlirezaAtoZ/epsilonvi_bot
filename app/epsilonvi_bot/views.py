@@ -11,10 +11,44 @@ def to_camel_case(string):
     return ''.join(word.capitalize() for word in string.split('_'))
 
 
+class BaseHandler:
+    def __init__(self, data) -> None:
+        self.data = data
+
+    def get_telegram_id(self):
+        telegram_id = self.data['from']['id']
+        return str(telegram_id)
+
+    def get_telegram_name(self):
+        telegram_name = self.data['from']['first_name']
+        return str(telegram_name)
+
+
+class MessageHandler(BaseHandler):
+    def __init__(self, data) -> None:
+        super().__init__(data)
+
+
+class CallbackQueryHandler(BaseHandler):
+    def __init__(self, data) -> None:
+        super().__init__(data)
+
+
+class OtherHandler(BaseHandler):
+    def __init__(self, data) -> None:
+        super().__init__(data)
+
+
+class Handlers:
+    message = MessageHandler
+    callback_query = CallbackQueryHandler
+    other = OtherHandler
+
+
 @csrf_exempt
 def webhook(request):
     # check the sender is telegram
-    if not hasattr(request.META, 'X-Telegram-Bot-Api-Secret-Token'):
+    if not 'X-Telegram-Bot-Api-Secret-Token' in request.headers:
         return HttpResponseForbidden()
     elif os.environ.get('EPSILONVI_DEV_SECRET_TOKEN') == request.META.get('EPSILONVI_DEV_SECRET_TOKEN'):
         return HttpResponseBadRequest()
@@ -43,11 +77,8 @@ def webhook(request):
     handlers = [MessageHandler, CallbackQueryHandler, OtherHandler]
 
     for request_type in REQUEST_TYPES:
-        if hasattr(data, request_type):
-            handler_obj = getattr(
-                handlers,
-                f'{to_camel_case(request_type)}Handler',
-                OtherHandler)
+        if request_type in data:
+            handler_obj = getattr(Handlers, request_type)
             handler = handler_obj(data[request_type])
     
 
@@ -57,34 +88,4 @@ def webhook(request):
     if created:
         user.name = handler.get_telegram_name()
         user.save()
-    
-
-    
-
-    
     return HttpResponse()
-
-
-class BaseHandler:
-    def __init__(self, data) -> None:
-        self.data
-    
-
-    def get_telegram_id(self):
-        telegram_id = self.data['from']['id']
-        return str(telegram_id)
-    
-    def get_telegram_name(self):
-        telegram_name = self.data['from']['first_name']
-        return str(telegram_name)
-
-class MessageHandler(BaseHandler):
-    pass
-
-
-class CallbackQueryHandler(BaseHandler):
-    pass
-
-
-class OtherHandler(BaseHandler):
-    pass
