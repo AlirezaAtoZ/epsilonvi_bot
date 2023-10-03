@@ -22,14 +22,6 @@ def webhook(request):
         return HttpResponseBadRequest('secrect token not matched.')
     data = json.loads(request.body)
 
-    # check if the request is new
-    update_id = data['update_id']
-    update, new = bot_models.UpdateID.objects.get_or_create(
-        update_id=update_id)
-    if not new:
-        if update.is_done:
-            return HttpResponse('already processed the request.')
-
     # get request type
     REQUEST_TYPES = [
         'message', 'edited_message',
@@ -44,20 +36,23 @@ def webhook(request):
     for request_type in REQUEST_TYPES:
         if request_type in data:
             handler_obj = getattr(Handlers, request_type)
-            handler = handler_obj(data[request_type])
+            handler = handler_obj(data)
             break
     else:
         handler_obj = getattr(Handlers, 'other')
         handler = handler_obj(data)
+    
+    # from handlers import BaseHandler
+    # handler = BaseHandler()
+    if handler.is_done():
+        return HttpResponse('already processed the request.')
 
     # get or create user
-    telegram_id = handler.get_telegram_id()
-    user, created = user_models.User.objects.get_or_create(
-        telegram_id=telegram_id)
-    if created:
-        user.name = handler.get_telegram_name()
-        user.save()
+    # telegram_id = handler.get_telegram_id()
+    # user, created = user_models.User.objects.get_or_create(
+    #     telegram_id=telegram_id)
+    # if created:
+    #     user.name = handler.get_telegram_name()
+    #     user.save()
     
-    handler.handle()
-
-    return HttpResponse()
+    return handler.handle()
