@@ -22,7 +22,7 @@ class UpdateID(models.Model):
     The UpdateID is ued to avoid processing the same
     request more than once.
     """
-    update_id = models.BigIntegerField()
+    update_id = models.BigIntegerField(unique=True)
     is_done = models.BooleanField(default=False)
     datetime = models.DateTimeField(auto_now_add=True)
 
