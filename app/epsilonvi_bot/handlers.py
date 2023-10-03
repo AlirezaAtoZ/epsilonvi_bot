@@ -4,8 +4,8 @@ from datetime import datetime
 
 from django.http import HttpResponse
 
-from . import states
-from .states import States
+# from . import states
+from .states import States, UNIDFStartState
 from bot import models as bot_models
 from user import models as user_models
 
@@ -27,32 +27,27 @@ class BaseFromHandler(BaseHandler):
     def __init__(self, data) -> None:
         super().__init__(data)
         self.data = data[self.name]
-        self.user_telegram_id = self.get_telegram_id()
-        self.user_telegram_name = self.get_telegram_name()
-        self.user_chat_id = self.get_chat_id()
 
     def _get_telegram_id_(self):
-        telegram_id = self.data['from']['id']
-        return str(telegram_id)
+        self.user_telegram_id = self.data['from']['id']
 
     def _get_telegram_name_(self):
-        telegram_name = self.data['from']['first_name']
-        return str(telegram_name)
+        self.user_telegram_name = self.data['from']['first_name']
 
     def _get_chat_id_(self):
-        chat_id = self.data['chat']['id']
-        return str(chat_id)
+        self.user_chat_id = self.data['chat']['id']
 
     def _get_user_state_(self):
         self.user_state = bot_models.UserState.objects.get(user=self.user)
 
     def _get_or_create_user_(self):
         self.user, new_user = user_models.User.objects.get_or_create(
-            telegram_id=self.user_telegram_id
+            telegram_id=self.user_telegram_id,
+            name=self.user_telegram_name
         )
         if new_user:
             state = bot_models.State.objects.get(
-                name=states.UNIDFStartState.name)
+                name=UNIDFStartState.name)
             self.user_state = bot_models.UserState.objects.create(
                 user=self.user, state=state)
 
@@ -79,10 +74,14 @@ class BaseFromHandler(BaseHandler):
         self._is_done_()
         if self.is_done:
             return HttpResponse('already processed the request.')
+        
+        self._get_telegram_id_()
+        self._get_telegram_name_()
+        self._get_chat_id_()
         self._get_or_create_user_()
         self._get_user_state_()
 
-        state_obj = getattr(States, self.user_state.name)
+        state_obj = getattr(States, self.user_state.state.name)
         state = state_obj(self.name, self.data, self.user, self.user_chat_id, self.user_state)
         http_response = state.handle()
 
@@ -116,6 +115,9 @@ class CallbackQueryHandler(BaseFromHandler):
 
     def __init__(self, data) -> None:
         super().__init__(data)
+
+    def _get_chat_id_(self):
+        self.user_chat_id = self.data['message']['chat']['id']
 
 
 class OtherHandler(BaseHandler):

@@ -39,19 +39,22 @@ class UNIDFStartState(BaseState):
         super().__init__(input_type, input_data, user, user_chat_id, user_state)
 
     def _get_view_(self):
-        text = f"welcome\ncount: {self.input_data}"
+        count = int(self.input_data['data'])
+
+        # count = 0
+        text = f"Count: {count}"
         inline_keyboard = [
             [{'text': "increase ⏫",
-                "callback_data": f"{int(self.input_data['data']) + 1}"}],
+                "callback_data": f"{count + 1}"}],
             [{'text': "reset 🔁", "callback_data": '0'}]]
         reply_markup = {'inline_keyboard': inline_keyboard}
         return {'text': text, 'reply_markup': reply_markup}
 
     def handle(self):
         view = self._get_view_()
-        url = self._get_url_('sendMessage')
+        url = self._get_url_('editMessageText')
 
-        data = {'chat_id': self.user_chat_id}
+        data = {'chat_id': self.user_chat_id, 'message_id': self.input_data['message']['message_id']}
         data.update(view)
 
         res = requests.post(url, json=data)

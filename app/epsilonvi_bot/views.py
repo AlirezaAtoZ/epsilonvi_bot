@@ -44,8 +44,8 @@ def webhook(request):
     
     # from handlers import BaseHandler
     # handler = BaseHandler()
-    if handler.is_done():
-        return HttpResponse('already processed the request.')
+    # if handler.is_done():
+    #     return HttpResponse('already processed the request.')
 
     # get or create user
     # telegram_id = handler.get_telegram_id()

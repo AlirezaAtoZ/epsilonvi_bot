@@ -5,6 +5,6 @@ from bot.models import State
 
 
 class Command(BaseCommand):
-    def handle(self):
+    def handle(self, *args, **kwargs):
         state = State.objects.create(name="UNIDF_start")
-        self.stdout(self.style.SUCCESS(f'done!\nstates: {state.name}'))
+        self.stdout.write(self.style.SUCCESS(f'done!\nstates: {state.name}'))
