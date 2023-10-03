@@ -39,10 +39,11 @@ class MessageHandler(BaseHandler):
         data.update(view)
 
         url = f'https://api.telegram.org/bot{os.environ.get("EPSILONVI_DEV_BOT_TOKEN")}/sendMessage'
-        res = requests.post(url=url, data=data)
+        res = requests.post(url=url, json=data)
 
-        with open(f'{datetime.now()}.json', 'w') as f:
-            f.write(res)
+        with open(f'{datetime.now()}.json', 'w', encoding="utf-8") as f:
+            print(data, file=f)
+            print(res.text, file=f)
 
 
 

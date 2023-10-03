@@ -26,9 +26,10 @@ class UNIDFStartState(BaseState):
     
     def get_view(self):
         text = "welcome"
-        reply_markup = [
+        inline_keyboard = [
             [{'text': "hello world!", "callback_data": 'hello_world'}],
             [{'text': "سلام جهان!", "callback_data": 'hello_world_fa'}]]
+        reply_markup = {'inline_keyboard': inline_keyboard}
         return {'text': text, 'reply_markup': reply_markup}
 
 
