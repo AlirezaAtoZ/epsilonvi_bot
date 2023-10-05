@@ -45,6 +45,8 @@ class BaseFromHandler(BaseHandler):
             telegram_id=self.user_telegram_id
         )
         if new_user:
+            self.user.name = self.data["from"]["first_name"]
+            self.user.save()
             state = bot_models.State.objects.get(name=States.UNIDF_welcome.name)
             self.user_state = bot_models.UserState.objects.create(
                 user=self.user, state=state
