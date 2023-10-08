@@ -78,16 +78,7 @@ class StateInlineKeyboard(models.Model):
 
 class State(models.Model):
     name = models.CharField(max_length=64, unique=True)
-    # only when input is the keyboard
-    next_state = models.ForeignKey(
-        "State", on_delete=models.DO_NOTHING, null=True, blank=True
-    )
-    message = models.ForeignKey(
-        "StateMessage", on_delete=models.DO_NOTHING, null=True, blank=True
-    )
-    inline_keyboard = models.ForeignKey(
-        "StateInlineKeyboard", on_delete=models.DO_NOTHING, null=True, blank=True
-    )
+    # parent_state = models.ForeignKey("State", on_delete=models.CASCADE)
     ROLES = [
         ("UNIDF", "unidentified"),
         ("ADMIN", "admin"),
@@ -102,7 +93,13 @@ class State(models.Model):
 
 
 class UserState(models.Model):
-    user = models.ForeignKey(user_models.User, on_delete=models.DO_NOTHING)
-    state = models.ForeignKey(State, on_delete=models.DO_NOTHING)
+    user = models.OneToOneField(user_models.User, on_delete=models.CASCADE)
+    # default_state = State.objects.get(name="UNIDF_welcome")
+    state = models.ForeignKey(
+        State, on_delete=models.SET_NULL, null=True
+    )
 
     message_ids = models.TextField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"{self.user} {self.state}"

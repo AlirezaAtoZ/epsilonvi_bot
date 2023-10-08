@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from .states import States, Commands, StartCommand
 from bot import models as bot_models
 from user import models as user_models
+from epsilonvi_bot import models as epsilonvi_bot_models
 
 
 class BaseHandler:
@@ -43,6 +44,9 @@ class BaseFromHandler(BaseHandler):
     def _set_or_create_user_(self):
         self.user, new_user = user_models.User.objects.get_or_create(
             telegram_id=self.user_telegram_id
+        )
+        _, _ = epsilonvi_bot_models.Student.objects.get_or_create(
+            user = self.user, 
         )
         if new_user:
             self.user.name = self.data["from"]["first_name"]

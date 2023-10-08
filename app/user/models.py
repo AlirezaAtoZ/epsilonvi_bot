@@ -26,6 +26,7 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin):
     telegram_id = models.CharField(_('telegram ID'), max_length=64, unique=True)
     name = models.TextField(_('full name'), blank=True, null=True)
+    phone_number = models.CharField(max_length=12, blank=True, null=True)  # TODO add a validator
 
     is_active = models.BooleanField(default=True)
     is_superuser = models.BooleanField(default=False)

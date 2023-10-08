@@ -1,15 +1,13 @@
 from django.core.management.base import BaseCommand, CommandError
-from epsilonvi_bot.states import (
-    UNIDFWelcomeState,
-    UNIDFEditInfoState,
-    UNIDFEditInfoNameState,
-)
 from bot.models import State
+from epsilonvi_bot.states import States
 
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
-        states = [UNIDFWelcomeState, UNIDFEditInfoState, UNIDFEditInfoNameState]
+        states = [
+            States.UNIDF_edit_info_grade, States.UNIDF_edit_info_phone_number
+        ]
         for state in states:
             new_model, created = State.objects.get_or_create(name=state.name)
             if created:
