@@ -9,7 +9,7 @@ from django.http import HttpResponse
 from django.db.models import Model
 
 from bot import models as bot_models
-from epsilonvi_bot import models as epsilonvi_bot_models
+from epsilonvi_bot import models as eps_models
 
 
 class BaseState:
@@ -76,7 +76,7 @@ class BaseState:
                 self.next_state_model = bot_models.State.objects.get(
                     name=next_state_name
                 )
-            except Model.DoesNotExist as e:
+            except ObjectDoesNotExist as e:
                 msg = f"CUSTOM: State object does not exist!\n"
                 msg += f"{self.handler.data=}\n"
                 msg += f"{next_state_name=}\n"
@@ -315,7 +315,7 @@ class BaseInputState(BaseState):
             self.next_state_model = bot_models.State.objects.get(
                 name=self.next_state.name
             )
-        except Model.DoesNotExist as e:
+        except ObjectDoesNotExist as e:
             msg = f"next state model does not exist\n"
             msg += f"{self.handler.data=}"
             self.logger.error(msg=msg)
@@ -355,7 +355,7 @@ class BaseInputState(BaseState):
             self.next_state_model = bot_models.State.objects.get(
                 name=self.next_state.name
             )
-        except Model.DoesNotExist as e:
+        except ObjectDoesNotExist as e:
             msg = f"next state model does not exist\n"
             msg += f"{self.handler.data=}"
             self.logger.error(msg=msg)
@@ -432,7 +432,7 @@ class UNIDFEditInfoGrade(BaseInputState):
         self.expected_next_states = [States.UNIDF_edit_info.name]
 
     def _get_message_(self) -> dict:
-        grades = epsilonvi_bot_models.Student.GRADE_CHOICES
+        grades = eps_models.Student.GRADE_CHOICES
         inline_keyboard = []
         for grade in grades:
             if grade[0] == "UNKWN":
@@ -473,7 +473,7 @@ class StartCommand(BaseState):
         self._message_("send", data)
         try:
             next_state_model = bot_models.State.objects.get(name=next_state.name)
-        except Model.DoesNotExist as e:
+        except ObjectDoesNotExist as e:
             msg = f"state model: start does not exist!"
             self.logger.error(msg=msg)
             return HttpResponse(msg)

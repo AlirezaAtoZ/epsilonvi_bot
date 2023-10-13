@@ -1,15 +1,14 @@
 from django.core.management.base import BaseCommand, CommandError
 from bot.models import State
-from epsilonvi_bot.states import States
+from epsilonvi_bot.states.state_manager import StateManager
 
 
 class Command(BaseCommand):
     def handle(self, *args, **kwargs):
-        states = [
-            States.UNIDF_edit_info_grade, States.UNIDF_edit_info_phone_number
-        ]
+        states = StateManager.state_mapping.keys()
+
         for state in states:
-            new_model, created = State.objects.get_or_create(name=state.name)
+            new_model, created = State.objects.get_or_create(name=state)
             if created:
                 self.stdout.write(
                     self.style.SUCCESS(f"new model: {new_model} has created")

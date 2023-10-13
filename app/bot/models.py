@@ -1,5 +1,5 @@
 from django.db import models
-from user import models as user_models
+from user import models as usr_models
 
 
 class File(models.Model):
@@ -22,12 +22,12 @@ class UpdateID(models.Model):
     request more than once.
     """
 
-    update_id = models.BigIntegerField(unique=True)
+    update_id = models.BigIntegerField(unique_for_month="created")
     is_done = models.BooleanField(default=False)
-    datetime = models.DateTimeField(auto_now_add=True)
+    created = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
-        return str(self.datetime)
+        return str(self.created)
 
 
 class Message(models.Model):
@@ -93,7 +93,7 @@ class State(models.Model):
 
 
 class UserState(models.Model):
-    user = models.OneToOneField(user_models.User, on_delete=models.CASCADE)
+    user = models.OneToOneField(usr_models.User, on_delete=models.CASCADE)
     # default_state = State.objects.get(name="UNIDF_welcome")
     state = models.ForeignKey(
         State, on_delete=models.SET_NULL, null=True
@@ -103,3 +103,10 @@ class UserState(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} {self.state}"
+
+
+class CompactDictionary(models.Model):
+    word = models.CharField(max_length=128, unique=True)
+
+    def __str__(self) -> str:
+        return self.word

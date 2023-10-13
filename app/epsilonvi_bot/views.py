@@ -1,11 +1,11 @@
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
-from datetime import datetime
+# from datetime import datetime
 import json
 import os
-from bot import models as bot_models
-from user import models as user_models
-from .handlers import Handlers
+# from bot import models as bot_models
+# from user import models as usr_models
+from .handlers import HandlerManager
 
 
 # TODO put it in utils
@@ -42,26 +42,5 @@ def webhook(request):
         "chat_join_request",
     ]
 
-    for request_type in REQUEST_TYPES:
-        if request_type in data:
-            handler_obj = getattr(Handlers, request_type)
-            handler = handler_obj(data)
-            break
-    else:
-        handler_obj = getattr(Handlers, "other")
-        handler = handler_obj(data)
-
-    # from handlers import BaseHandler
-    # handler = BaseHandler()
-    # if handler.is_done():
-    #     return HttpResponse('already processed the request.')
-
-    # get or create user
-    # telegram_id = handler.get_telegram_id()
-    # user, created = user_models.User.objects.get_or_create(
-    #     telegram_id=telegram_id)
-    # if created:
-    #     user.name = handler.get_telegram_name()
-    #     user.save()
-
-    return handler.handle()
+    handler_manager = HandlerManager(data)
+    return handler_manager.handle()

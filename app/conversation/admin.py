@@ -1,5 +1,5 @@
 from django.contrib import admin
-
 from . import models
 
-admin.site.register(models.Subject, admin.ModelAdmin)
+
+admin.site.register(models.Package, admin.ModelAdmin)

@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     'user',
     'bot',
     'epsilonvi_bot',
+    'conversation',
+    'billing',
 ]
 
 AUTH_USER_MODEL = 'user.User'
