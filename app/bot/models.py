@@ -9,11 +9,12 @@ class File(models.Model):
     FILE_TYPES = [
         ("PHO", "photo"),
         ("VID", "video"),
-        ("VOC", "voice"),
+        ("VOC", "audio"),
         ("DOC", "document"),
         ("VDM", "video_note"),
     ]
     file_type = models.CharField(max_length=3, choices=FILE_TYPES, default="PHO")
+    duration = models.IntegerField(blank=True, null=True)
 
 
 class UpdateID(models.Model):
@@ -36,7 +37,7 @@ class Message(models.Model):
     from_id = models.ForeignKey(
         "user.User", on_delete=models.DO_NOTHING, blank=True, null=True
     )
-    date = models.DateTimeField()
+    date = models.DateTimeField(auto_now_add=True)
 
     # The reason why not using foreign key type here is because
     # thee parent messages may not be in the database
@@ -67,6 +68,18 @@ class Message(models.Model):
             output += "no text provided"
         return output
 
+    def get_message_dict(self):
+        message = {}
+        if self.message_type == "TXT":
+            message.update({"text": self.text})
+        elif self.message_type in ["PHO", "VOC"]:
+            _d = {}
+            if self.caption:
+                _d.update({"caption": self.caption})
+            file = self.files.all()[0]
+            _d.update({file.get_file_type_display(): file.file_id})
+            message.update(_d)
+        return message
 
 class StateMessage(models.Model):
     text = None
@@ -98,6 +111,15 @@ class UserState(models.Model):
     state = models.ForeignKey(
         State, on_delete=models.SET_NULL, null=True
     )
+
+    ROLES = [
+        ("UNIDF", "unidentified"),
+        ("ADMIN", "admin"),
+        ("SUADM", "super admin"),
+        ("TCHER", "teacher"),
+        ("STDNT", "student"),
+    ]
+    role = models.CharField(max_length=5, choices=ROLES, default="UNIDF")
 
     message_ids = models.TextField(null=True, blank=True)
 

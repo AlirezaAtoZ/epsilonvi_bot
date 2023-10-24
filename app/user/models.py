@@ -1,3 +1,4 @@
+from pyexpat import model
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils.translation import gettext_lazy as _
@@ -25,6 +26,10 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     telegram_id = models.CharField(_('telegram ID'), max_length=64, unique=True)
+    
+    public_id = models.CharField(max_length=64, blank=True, null=True)
+    rand_int = models.CharField(max_length=8, blank=True, null=True)
+
     name = models.TextField(_('full name'), blank=True, null=True)
     phone_number = models.CharField(max_length=12, blank=True, null=True)  # TODO add a validator
 
@@ -33,6 +38,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_admin = models.BooleanField(default=False)
     last_login = models.DateTimeField(_('last login'), blank=True, null=True)
     date_joined = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+
+    # TODO do it with RAM
+    lock = models.BooleanField(default=False)
 
     objects = UserManager()
 

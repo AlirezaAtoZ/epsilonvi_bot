@@ -11,7 +11,9 @@ class Command(BaseCommand):
                 name="تک درس تخصصی",
                 number_of_questions=10,
                 field=s.field,
+                grade=s.grade,
                 is_active=True,
+                package_type="SNG",
                 price=30000,
             )
             
@@ -23,7 +25,9 @@ class Command(BaseCommand):
                 name="تک درس تخصصی",
                 number_of_questions=30,
                 field=s.field,
+                grade=s.grade,
                 is_active=True,
+                package_type="SNG",
                 price=60000,
             )
             pckg.subjects.add(s)

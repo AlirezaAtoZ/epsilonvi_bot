@@ -1,3 +1,4 @@
+import copy
 import json
 
 from django.http import HttpResponse
@@ -5,6 +6,7 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from .base import BaseState
 from conversation import models as conv_models
+from conversation import handlers
 from bot import models as bot_models
 from epsilonvi_bot import models as eps_models
 
@@ -30,7 +32,9 @@ def print_user_detailed(user):
 
 def print_student_active_packages(user):
     user_packages = conv_models.StudentPackage.objects.filter(
-        student__user=user, is_done=False
+        student__user=user,
+        is_done=False,
+        is_pending=False,
     )
     text = ""
     if user_packages.count() == 0:
@@ -63,7 +67,7 @@ def print_student_unseen_conversations(user):
     if conversations.count() == 0:
         text = "شما پرسش خوانده نشده ندارید.\n"
     for idx, conv in enumerate(conversations):
-        t = f"{idx}- {conv._get_telegram_command()}\n"
+        t = f"{idx}- {conv.get_telegram_command()}\n"
         text += t
     return text
 
@@ -78,7 +82,7 @@ def print_student_all_conversations(user):
     else:
         for idx, conv in enumerate(convs):
             status = "خاتمه یافته" if conv.is_done else "فعال"
-            t = f"{idx}- {conv._get_telegram_command()} {status} {conv.subject}\n"
+            t = f"{idx}- {conv.get_telegram_command()} {status} {conv.subject}\n"
             text += t
     return text
 
@@ -110,17 +114,17 @@ class StudentError(BaseState):
         super().__init__(telegram_response_body, user)
         self.name = "STDNT_error"
 
-    def get_message(self, chat_id):
+    def get_message(self, chat_id=None):
         text = "مشکلی پیش آمده مجددا تلاش کنید."
         message = self._get_message_dict(text=text, chat_id=chat_id)
         return message
 
     def _handle_message(self):
-        self.send_message(self.get_message(self.chat_id))
+        self.send_text(self.get_message(self.chat_id))
         return HttpResponse("Something went wrong")
 
     def _handle_callback_query(self):
-        self.send_message(self.get_message(self.chat_id))
+        self.send_text(self.get_message(self.chat_id))
         return HttpResponse("Something went wrong")
 
 
@@ -131,7 +135,7 @@ class StudentHome(BaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
         self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_input_types.append(self.MESSAGE)
+        # self.expected_input_types.append(self.MESSAGE)
 
         self.expected_states = {
             StudentQuestionManager.name: StudentQuestionManager,
@@ -185,6 +189,22 @@ class StudentBaseState(BaseState):
             ],
         ]
         return btns
+
+    def send_error(self, target_state, chat_id=None):
+        _err_state = StudentError(self._tlg_res, self.user)
+        message = _err_state.get_message(chat_id=chat_id)
+        inline_keyboard = self._get_home_and_back_inline_button(target_state)
+        message = self._get_message_dict(**message, inline_keyboard=inline_keyboard)
+
+        trans_method = getattr(self, self.transition_method_name)
+        trans_method(message)
+
+        msg = self._get_error_prefix()
+        msg += f"{self.user.userstate.state.name}\t"
+        msg += f"{self.user=}\t{self.input_text}"
+        self.logger.error(msg=msg)
+
+        return HttpResponse()
 
 
 class StudentEditInfo(StudentBaseState):
@@ -248,7 +268,7 @@ class StudentBaseEditInfo(StudentBaseState):
         self.delete_message(message)
 
         message = self.parent_state(self._tlg_res, self.user).get_message()
-        self.send_message(message)
+        self.send_text(message)
 
         self.user.userstate.state = bot_models.State.objects.get(
             name=self.parent_state.name
@@ -341,6 +361,18 @@ class StudentEditInfoGrade(StudentBaseState):
         return http_response
 
 
+class StudentPackageBaseState(StudentBaseState):
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_states = {
+            StudentHome.name: StudentHome,
+            StudentPackageManager.name: StudentPackageManager,
+            StudentPackageConfirm.name: StudentPackageConfirm,
+            StudentPackageAdd.name: StudentPackageAdd,
+        }
+        self.expected_input_types = [self.CALLBACK_QUERY]
+
+
 class StudentPackageManager(StudentBaseState):
     name = "STDNT_package_manager"
     text = "مدیریت بسته"
@@ -349,7 +381,8 @@ class StudentPackageManager(StudentBaseState):
         super().__init__(telegram_response_body, user)
         self.expected_input_types.append(self.CALLBACK_QUERY)
         self.expected_states = {
-            StudentNewPackage.name: StudentNewPackage,
+            StudentPackageAdd.name: StudentPackageAdd,
+            StudentPackageAdd.name: StudentPackageAdd,
             StudentPackageHistory.name: StudentPackageHistory,
             StudentHome.name: StudentHome,
         }
@@ -357,7 +390,7 @@ class StudentPackageManager(StudentBaseState):
     def get_message(self, chat_id=None):
         text = print_student_active_packages(self.user)
         _list = [
-            [(StudentNewPackage.text, StudentNewPackage.name, "")],
+            [(StudentPackageAdd.text, StudentPackageAdd.name, "")],
             [(StudentPackageHistory.text, StudentPackageHistory.name, "")],
             [(self.BACK_BTN_TEXT, StudentHome.name, "")],
         ]
@@ -368,133 +401,148 @@ class StudentPackageManager(StudentBaseState):
         return message
 
 
-class StudentNewPackage(StudentBaseState):
-    name = "STDNT_new_package"
-    text = "بسته جدید"
+class StudentPackageAdd(StudentPackageBaseState):
+    name = "STDNT_package_add"
+    text = "خرید بسته جدید"
 
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
-        self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_states = {
-            StudentNewPackageConfirm.name: StudentNewPackageConfirm,
-            StudentNewPackageChoose.name: StudentNewPackageChoose,
-            StudentPackageManager.name: StudentPackageManager,
-            StudentHome.name: StudentHome,
-        }
 
-    def get_message(self, chat_id=None):
-        text = "از لیست زیر یک بسته را انتخاب کنید:\n"
+    def get_message(
+        self,
+        field=None,
+        number_of_questions=None,
+        single=False,
+        chat_id=None,
+    ):
+        text = "با استفاده از دکمه های زیر یک بسته انتخاب کنید.\n"
 
-        _list = [
-            [
-                (
-                    "۳۰ سوال بسته جامع تخصصی",
-                    StudentNewPackageConfirm.name,
-                    {"package": "ALL-SPC-30"},
-                )
-            ],
-            [
-                (
-                    "۱۰ سوال بسته جامع تخصصی",
-                    StudentNewPackageConfirm.name,
-                    {"package": "ALL-SPC-10"},
-                )
-            ],
-            [
-                (
-                    "۳۰ سوال بسته تک درس تخصصی",
-                    StudentNewPackageChoose.name,
-                    {"package": "ONE-SPC-30"},
-                )
-            ],
-            [
-                (
-                    "۱۰ سوال بسته تک درس تخصصی",
-                    StudentNewPackageChoose.name,
-                    {"package": "ONE-SPC-10"},
-                )
-            ],
-            [
-                (
-                    "۳۰ سوال بسته جامع عمومی",
-                    StudentNewPackageConfirm.name,
-                    {"package": "ALL-GEN-30"},
-                )
-            ],
-            [
-                (
-                    "۱۰ سوال بسته جامع عمومی",
-                    StudentNewPackageConfirm.name,
-                    {"package": "ALL-GEN-10"},
-                )
-            ],
-        ]
+        field = field if field else self.user.student.grade[2:]
+        num_que = number_of_questions if number_of_questions else 10
+        data = {"noq": num_que, "field": field, "single": single}
+        _list = []
+        # default package
 
-        inliine_keyboard = self._get_inline_keyboard_list(_list)
-        _home_back = self._get_home_and_back_inline_button(StudentPackageManager)
-        inliine_keyboard += _home_back
+        # number of questions
+        char_10q = "✅" if num_que == 10 else ""
+        char_30q = "✅" if num_que == 30 else ""
+
+        _d = copy.deepcopy(data)
+        _d.update({"noq": 10})
+        btn_10q = [f"{char_10q} ۱۰ سوال", StudentPackageAdd.name, _d]
+
+        _d = copy.deepcopy(data)
+        _d.update({"noq": 30})
+        btn_30q = [f"{char_30q} ۳۰ سوال", StudentPackageAdd.name, _d]
+
+        _list.append([btn_10q, btn_30q])
+        # field
+        char_mth = "✅" if field == "MTH" else ""
+        char_bio = "✅" if field == "BIO" else ""
+        char_eco = "✅" if field == "ECO" else ""
+
+        _d = copy.deepcopy(data)
+        _d.update({"field": "MTH"})
+        btn_mth = [f"{char_mth} ریاضی", StudentPackageAdd.name, _d]
+
+        _d = copy.deepcopy(data)
+        _d.update({"field": "BIO"})
+        btn_bio = [f"{char_bio} تجربی", StudentPackageAdd.name, _d]
+
+        _d = copy.deepcopy(data)
+        _d.update({"field": "ECO"})
+        btn_eco = [f"{char_eco} انسانی", StudentPackageAdd.name, _d]
+
+        _list.append([btn_mth, btn_bio, btn_eco])
+        # complete packages
+        _q1 = conv_models.Package.objects.filter(
+            field=field,
+            package_type="ALL",
+            number_of_questions=num_que,
+            is_active=True,
+        )
+        _q2 = conv_models.Package.objects.filter(
+            field="GEN",
+            package_type="ALL",
+            number_of_questions=num_que,
+            is_active=True,
+        )
+        _q = _q1.union(_q2)
+        for p in _q:
+            btn = [f"{p}", StudentPackageConfirm.name, {"package": p.pk}]
+            _list.append([btn])
+        # single packages
+        if single:
+            _d = copy.deepcopy(data)
+            _d.update({"single": False})
+            btn_sng = [f"🔽 بسته های تک درس 🔽", StudentPackageAdd.name, _d]
+            _list.append([btn_sng])
+            _q = conv_models.Package.objects.filter(
+                field=field,
+                number_of_questions=num_que,
+                package_type="SNG",
+                is_active=True,
+            )
+            for p in _q:
+                btn = [f"- {p} -", StudentPackageConfirm.name, {"package": p.pk}]
+                _list.append([btn])
+        else:
+            _d = copy.deepcopy(data)
+            _d.update({"single": True})
+            btn_sng = [f"⏹️ بسته های تک درس ⏹️", StudentPackageAdd.name, _d]
+            _list.append([btn_sng])
+
+        btn_home = [f"{StudentHome.text}", StudentHome.name, ""]
+        _list.append([btn_home])
+        btn_back = [f"{self.BACK_BTN_TEXT}", StudentPackageManager.name, ""]
+        _list.append([btn_back])
+        inline_keyboard = self._get_inline_keyboard_list(_list)
         message = self._get_message_dict(
-            text=text, inline_keyboard=inliine_keyboard, chat_id=chat_id
+            text=text, inline_keyboard=inline_keyboard, chat_id=chat_id
         )
         return message
 
+    def _handle_callback_query(self, force_transition_type=None, get_message_kwargs={}):
+        if self.callback_query_next_state == StudentPackageConfirm.name:
+            _pid = self.callback_query_data.get("package", None)
+            if _pid:
+                _q = conv_models.Package.objects.filter(pk=_pid)
+                if _q.exists():
+                    package = _q[0]
+                    get_message_kwargs = {"package": package}
+        elif self.callback_query_next_state == StudentPackageAdd.name:
+            single = self.callback_query_data.get("single", None)
+            field = self.callback_query_data.get("field", None)
+            num_que = self.callback_query_data.get("noq", None)
+            if num_que and field and not (single is None):
+                get_message_kwargs = {
+                    "single": single,
+                    "field": field,
+                    "number_of_questions": num_que,
+                }
 
-class StudentNewPackageChoose(StudentBaseState):
-    name = "STDNT_new_package_choose"
-    text = "انتخاب تک درس"
+        return super()._handle_callback_query(force_transition_type, get_message_kwargs)
+
+
+class StudentPackageConfirm(StudentPackageBaseState):
+    name = "STDNT_package_confirm"
+    text = "تایید و صفحه پرداخت"
 
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
-        self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_states = {
-            StudentNewPackageConfirm.name: StudentNewPackageConfirm,
-            StudentNewPackageChoose.name: StudentNewPackageChoose,
-            StudentPackageManager.name: StudentPackageManager,
-            StudentHome.name: StudentHome,
-        }
 
-    def get_message(self, chat_id=None):
-        pass
-
-
-class StudentNewPackageConfirm(StudentBaseState):
-    name = "STDNT_new_package_confirm"
-    text = "تایید حرید"
-
-    def __init__(self, telegram_response_body, user) -> None:
-        super().__init__(telegram_response_body, user)
-        self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_states = {
-            "STDNT_package_manager": StudentPackageManager,
-            "STDNT_new_package": StudentNewPackage,
-            "STDNT_home": StudentHome,
-        }
-
-    def get_message(self, chat_id=None):
-        try:
-            self._set_callback_query_data()
-            selected_package = conv_models.Package.objects.get(
-                pk=int(self.callback_query_data)
-            )
-            if selected_package.is_active:
-                text = "حرید بسته:\n"
-                text += str(selected_package)
-                inline_keyboard = [
-                    [{"text": "صفحه پرداخت", "url": "https://zarinpal.com"}],
-                ]
-                _home_back = self._get_home_and_back_inline_button(StudentNewPackage)
-                inline_keyboard += _home_back
-                message = self._get_message_dict(
-                    text=text, inline_keyboard=inline_keyboard, chat_id=chat_id
-                )
-                return message
-        except ObjectDoesNotExist as err:
-            msg = self._get_error_prefix()
-            msg += f"{self.data}"
-            self.logger.error(msg=msg)
-
-        text = "امکان خرید این بسته وجود ندارد."
-        inline_keyboard = self._get_home_and_back_inline_button(StudentNewPackage)
+    def get_message(self, package, chat_id=None):
+        text = "خرید پکیج:\n"
+        text += f"{package.display_detailed()}"
+        inline_keyboard = [
+            [
+                {
+                    "text": "انتقال به درگاه پرداخت",
+                    "url": "https://t.me/epsilonvibot?start=action_hello_world",
+                }
+            ],
+        ]
+        inline_keyboard += self._get_home_and_back_inline_button(StudentPackageAdd)
         message = self._get_message_dict(
             text=text, inline_keyboard=inline_keyboard, chat_id=chat_id
         )
@@ -523,6 +571,17 @@ class StudentPackageHistory(StudentBaseState):
         return message
 
 
+class StudentQuestionBaseState(StudentBaseState):
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_states = {
+            StudentHome.name: StudentHome,
+            StudentQuestionManager.name: StudentQuestionManager,
+            StudentQuestionAdd.name: StudentQuestionAdd,
+            StudentQuestionCompose.name: StudentQuestionCompose,
+        }
+
+
 class StudentQuestionManager(StudentBaseState):
     name = "STDNT_question_manager"
     text = "مدیریت پرسش و پاسخ"
@@ -531,6 +590,7 @@ class StudentQuestionManager(StudentBaseState):
         super().__init__(telegram_response_body, user)
         self.expected_input_types.append(self.CALLBACK_QUERY)
         self.expected_states = {
+            StudentQuestionAdd.name: StudentQuestionAdd,
             StudentNewQuestionChoose.name: StudentNewQuestionChoose,
             StudentQuestionHistory.name: StudentQuestionHistory,
             StudentHome.name: StudentHome,
@@ -539,7 +599,7 @@ class StudentQuestionManager(StudentBaseState):
     def get_message(self, chat_id=None):
         text = print_student_unseen_conversations(user=self.user)
         _list = [
-            [(StudentNewQuestionChoose.text, StudentNewQuestionChoose.name, "")],
+            [(StudentQuestionAdd.text, StudentQuestionAdd.name, "")],
             [(StudentQuestionHistory.text, StudentQuestionHistory.name, "")],
             [(self.BACK_BTN_TEXT, StudentHome.name, "")],
         ]
@@ -548,6 +608,95 @@ class StudentQuestionManager(StudentBaseState):
             text=text, inline_keyboard=inline_keyboard, chat_id=chat_id
         )
         return message
+
+
+class StudentQuestionAdd(StudentQuestionBaseState):
+    name = "STDNT_question_add"
+    text = "پرسش جدید"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_input_types = [self.CALLBACK_QUERY]
+
+    def get_message(self, student_package=None, chat_id=None):
+        text = "درس مورد نظر خود را انتخاب کنید.\n"
+        _list = []
+        # active packages
+        _q = conv_models.StudentPackage.objects.filter(
+            student=self.user.student,
+            is_done=False,
+        )
+        for sp in _q:
+            char_sel = "⏹️"
+            if student_package == sp:
+                char_sel = "🔽"
+            btn = [
+                f"{char_sel} {sp.package} ({sp.asked_questions}/{sp.package.number_of_questions}) {char_sel}",
+                StudentQuestionAdd.name,
+                {"sp": sp.pk},
+            ]
+            _list.append([btn])
+            if student_package == sp:
+                _sp_subjs = sp.package.subjects.all()
+                _sp_subjs_len = _sp_subjs.count()
+                for i in range(0, _sp_subjs_len, 2):
+                    sub = _sp_subjs[i]
+                    btn1 = [
+                        f"-{sub}-",
+                        StudentQuestionCompose.name,
+                        {"sp": sp.pk, "s": sub.pk},
+                    ]
+                    if i + 1 < _sp_subjs_len:
+                        sub = _sp_subjs[i + 1]
+                        btn2 = [
+                            f"-{sub}-",
+                            StudentQuestionCompose.name,
+                            {"sp": sp.pk, "s": sub.pk},
+                        ]
+                        _list.append([btn1, btn2])
+                    else:
+                        _list.append([btn1])
+
+        inline_keyboard = self._get_inline_keyboard_list(_list)
+        inline_keyboard += self._get_home_and_back_inline_button(StudentQuestionManager)
+        message = self._get_message_dict(text=text, inline_keyboard=inline_keyboard)
+        return message
+
+    def _handle_callback_query(self, force_transition_type=None, get_message_kwargs={}):
+        if self.callback_query_next_state == StudentQuestionAdd.name:
+            _spid = self.callback_query_data.get("sp", None)
+            if _spid:
+                _q = conv_models.StudentPackage.objects.filter(
+                    pk=_spid, student=self.user.student
+                )
+                if _q.exists():
+                    student_package = _q[0]
+                    get_message_kwargs = {"student_package": student_package}
+        elif self.callback_query_next_state == StudentQuestionCompose.name:
+            _spid = self.callback_query_data.get("sp", None)
+            _subid = self.callback_query_data.get("s", None)
+            if _spid and _subid:
+                _sp = conv_models.StudentPackage.objects.filter(
+                    pk=_spid,
+                    student=self.user.student,
+                    is_done=False,
+                )
+                if _sp.exists():
+                    student_package = _sp[0]
+                    _s = student_package.package.subjects.filter(pk=_subid)
+                    if _s.exists():
+                        subject = _s[0]
+                        _c = conv_models.Conversation.objects.filter(
+                            student=self.user.student, conversation_state="ZERO"
+                        )
+                        _c.delete()
+                        _ = conv_models.Conversation.objects.create(
+                            student_package=student_package,
+                            subject=subject,
+                            student=self.user.student,
+                        )
+
+        return super()._handle_callback_query(force_transition_type, get_message_kwargs)
 
 
 class StudentNewQuestionChoose(StudentBaseState):
@@ -560,225 +709,271 @@ class StudentNewQuestionChoose(StudentBaseState):
         self.expected_states = {
             StudentQuestionManager.name: StudentQuestionManager,
             StudentNewQuestionChoose.name: StudentNewQuestionChoose,
-            StudentNewPackage.name: StudentNewPackage,
-            StudentNewQuestionCompose.name: StudentNewQuestionCompose,
+            StudentQuestionCompose.name: StudentQuestionCompose,
+            StudentPackageAdd.name: StudentPackageAdd,
             StudentHome.name: StudentHome,
         }
 
-    def _get_buttons(self, callback_data=""):
-        _list = []
-        grade = subject = student_package = ""
-        if callback_data == "":
-            _list = [
-                [
-                    (
-                        self.user.student.grade.get_grade_display(),
-                        StudentNewQuestionChoose.name,
-                        {"step": "grade", "grade": self.user.student.grade},
-                    )
-                ]
-            ]
-            for f, f_text in eps_models.Subject.FIELD_CHOICES[:-1]:
-                row = []
-                for g, g_text in eps_models.Subject.GRADE_CHOICES[:-1]:
-                    btn = (
-                        f"{g_text, f_text}",
-                        StudentNewQuestionChoose.name,
-                        {"step": "grade", "grade": f"{g}{f}"},
-                    )
-                    row.append(btn)
-                _list.append(row)
-            return _list
-        else:
-            _dict = json.loads(self.callback_query_data)
-            step = _dict["step"]
-            if step == "grade":
-                grade = _dict["grade"]
-                g = grade[:2]
-                f = grade[2:]
-                _list = []
-                subjects = eps_models.Subject.objects.filter(field=f, grade=g)
-                for s in subjects:
-                    l = [
-                        (
-                            s.name,
-                            StudentNewQuestionChoose.name,
-                            {"step": "subject", "subject": s.pk, "grade": grade},
-                        )
-                    ]
-                    _list.append(l)
-                l = [("اتغییر مقطع", StudentNewQuestionChoose, "")]
-                _list.append(l)
-                return _list
-            elif step == "subject":
-                subject = _dict["subject"]
-                grade = _dict["grade"]
-                student_packages = conv_models.StudentPackage.objects.filter(
-                    student__user=self.user, package__subjects__pk=subject
-                )
-                _list = []
-                for p in student_packages:
-                    l = [
-                        (
-                            f"{p.package.name} {p.asked_questions}/{p.package.number_of_questions}",
-                            StudentNewQuestionChoose,
-                            {
-                                "step": "student_package",
-                                "student_package": p.pk,
-                                "subject": subject,
-                                "grade": grade,
-                            },
-                        )
-                    ]
-                    _list.append(l)
-                l = [
-                    (
-                        "اتغییر درس",
-                        StudentNewQuestionChoose,
-                        {"step": "grade", "grade": grade},
-                    )
-                ]
-            elif step == "student_package":
-                grade = _dict["grade"]
-                subject = _dict["subject"]
-                student_package = _dict["student_package"]
-
-                _list = []
-                l = [
-                    (
-                        "تغییر درس",
-                        StudentNewQuestionChoose.name,
-                        {"step": "subject", "subject": subject, "grade": grade},
-                    )
-                ]
-                _list.append(l)
-                l = [
-                    (
-                        StudentNewQuestionCompose.text,
-                        StudentNewQuestionCompose.name,
-                        {
-                            "grade": grade,
-                            "subject": subject,
-                            "student_package": student_package,
-                        },
-                    )
-                ]
-                _list.append(l)
-        return _list, grade, subject, student_package
-
     def get_message(self, chat_id=None):
-        _stdnt_pckgs = conv_models.StudentPackage.objects.filter(
-            student__user=self.user, is_done=False
+        student_packages = conv_models.StudentPackage.objects.filter(
+            student__user=self.user,
+            is_done=False,
+            is_pending=False,
         )
-        if _stdnt_pckgs.count() == 0:
-            text = "شما بسته فعالی ندارید\n"
-            _list = [
-                [
-                    (StudentNewPackage.text, StudentNewPackage.name, ""),
-                ],
-            ]
+        if not student_packages.exists():
+            return self._get_message_dict(text="None")
+        else:
+            text = "یک درس را انتخاب کنید."
+            _c = 0
+            _r = 0
+            _list = [[]]
+            # TODO add paging
+            for sp in student_packages:
+                subjects = sp.package.subjects.all()
+                for s in subjects:
+                    btn = (
+                        f"{s.name} {sp.package.name}",
+                        StudentQuestionCompose.name,
+                        {"student_package": sp.pk, "subject": s.pk},
+                    )
+                    if _c >= 3:
+                        _c = 1
+                        _r += 1
+                        _list.append([])
+                        _list[_r].append(btn)
+                    else:
+                        _c += 1
+                        _list[_r].append(btn)
+            btn = [(f"{StudentPackageAdd.text}", StudentPackageAdd.name, "")]
+            _list.append(btn)
             inline_keyboard = self._get_inline_keyboard_list(_list)
-            inline_keyboard += self._get_home_and_back_inline_button(
-                StudentQuestionManager
+            _hbi = self._get_home_and_back_inline_button(StudentQuestionManager)
+            inline_keyboard += _hbi
+            message = self._get_message_dict(
+                text=text, inline_keyboard=inline_keyboard, chat_id=chat_id
             )
-            message = self._get_message_dict(text=text, inline_keyboard=inline_keyboard)
             return message
 
-        if self.callback_query_data == "":
-            _dict = ""
-        else:
-            _dict = json.loads(self.callback_query_data)
-        _list, grade, subject, student_package = self._get_buttons(_dict)
-        inline_keyboard = self._get_inline_keyboard_list(_list)
-        grade = ""
-        subject = ""
-        student_package = ""
-        text = "مقطع تحصیلی، درس و بسته مورد نظر در رابطه با پرسش خود را با استفاده از دکمه های زیر انتخاب کنید.\n"
-        text += f"مقطع تحصیلی: {grade}\n"
-        text += f"درس: {subject}\n"
-        text += f"بسته: {student_package}\n"
-        inline_keyboard += self._get_home_and_back_inline_button(StudentQuestionManager)
-        message = self._get_message_dict(
-            text=text, inline_keyboard=inline_keyboard, chat_id=chat_id
+    def _delete_create_draft_conversation(self, student_package_id, subject_id):
+        conv_models.Conversation.objects.filter(
+            conversation_state="Q-STDNT-DRFT",
+            student=self.user.student,
+        ).delete()
+
+        _sp = conv_models.StudentPackage.objects.filter(
+            pk=student_package_id,
+            student__user=self.user,
         )
-        return message
+        if not _sp.exists():
+            return False
+        _s = _sp[0].package.subjects.filter(pk=subject_id)
+        if not _s.exists():
+            return False
+        conv_models.Conversation.objects.create(
+            conversation_state="Q-STDNT-DRFT",
+            student=self.user.student,
+            student_package=_sp[0],
+            subject=_s[0],
+        )
+        return True
 
     def _handle_callback_query(self):
-        # self.logger.error(f"XXX: {self.callback_query_next_state=}")
-        if self.callback_query_next_state == StudentNewQuestionChoose.name:
-            data = self._get_message_dict(message_id=self.message_id)
-            self.delete_message(data)
-            next_message = self.get_message()
-            self.send_message(next_message)
-            http_respone = HttpResponse()
-        elif self.callback_query_next_state == StudentNewQuestionCompose.name:
-            data = self._get_message_dict(message_id=self.message_id)
-            self.delete_message(data)
-            next_message = StudentNewQuestionCompose(
-                self._tlg_res, self.user
-            ).get_message()
-            self.send_message(next_message)
-            http_respone = HttpResponse()
-            self.user.userstate.state = bot_models.State.objects.get(
-                name=StudentNewQuestionCompose.name
+        if self.callback_query_next_state == StudentQuestionCompose.name:
+            sp_id = self.callback_query_data.get("student_package")
+            s_id = self.callback_query_data.get("subject")
+            _conv = self._delete_create_draft_conversation(
+                student_package_id=sp_id, subject_id=s_id
             )
-            self.user.userstate.save()
-        else:
-            http_respone = super()._handle_callback_query()
-        return http_respone
+            if _conv:
+                self.save_message_ids(update_ids=[self.message_id])
+        return super()._handle_callback_query()
 
 
-class StudentNewQuestionCompose(StudentBaseState):
-    name = "STDNT_new_question_compose"
+class StudentQuestionCompose(StudentQuestionBaseState):
+    name = "STDNT_question_compose"
     text = "نوشتن پرسش"
 
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
-        self.expected_input_types.append(self.MESSAGE)
-        self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_states = {
-            StudentNewQuestionComposeConfirm.name: StudentNewQuestionComposeConfirm,
-            StudentNewQuestionChoose.name: StudentNewQuestionChoose,
-            StudentHome.name: StudentHome,
-        }
+        self.expected_input_types = [self.MESSAGE, self.CALLBACK_QUERY]
 
     def get_message(self, chat_id=None):
         text = "سوال خود بپرسید:\n"
-        text += "می توانید سوال خود را به صورت متن، عکس یا ویس ارسال کنید.\n"
+        text += "می توانید سوال خود را به صورت متن، عکس یا ویس (حداکثر ۶۰ ثانیه) ارسال کنید.\n"
         _list = [
-            [{StudentHome.text, StudentHome.name, ""}],
-            [("تغییر مقطغ، درس یا بسته", StudentNewQuestionChoose.name, "")],
-        ]
-        inline_keyboard = self._get_inline_keyboard_list(_list)
-        message = self._get_message_dict(text=text, inline_keyboard=inline_keyboard)
-        return message
-
-
-class StudentNewQuestionComposeConfirm(StudentBaseState):
-    name = "STDNT_new_question_compose_confirm"
-    text = "تایید و ارسال"
-
-    def __init__(self, telegram_response_body, user) -> None:
-        super().__init__(telegram_response_body, user)
-        self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_states = {
-            StudentQuestionManager.name: StudentQuestionManager,
-            StudentNewQuestionCompose.name: StudentNewQuestionCompose,
-            StudentHome.name: StudentHome,
-        }
-
-    def get_message(self, chat_id=None):
-        text = "سوال شما دریافت شد"
-        _list = [
-            [(self.text, StudentQuestionManager.name, "")],
-            [("تغییر پرسش", StudentNewQuestionCompose.name, {"edit": True})],
-            [(StudentHome.text, StudentHome.name, "")],
+            [{f"{StudentHome.text}", StudentHome.name, ""}],
+            [("تغییر مقطع درس یا بسته", StudentQuestionAdd.name, "")],
         ]
         inline_keyboard = self._get_inline_keyboard_list(_list)
         message = self._get_message_dict(
             text=text, inline_keyboard=inline_keyboard, chat_id=chat_id
         )
         return message
+
+    def _get_message_type(self, message):
+        if type(message) != dict:
+            return False
+        if "text" in message.keys():
+            return "text"
+        elif "voice" in message.keys():
+            return "voice"
+        elif "photo" in message.keys():
+            return "photo"
+        else:
+            # not supported types
+            return "other"
+
+    def _handle_other_type(self):
+        return HttpResponse()
+
+    def _handle_base_type(self, message_model):
+        try:
+            conversation = conv_models.Conversation.objects.get(
+                student=self.user.student, conversation_state="ZERO"
+            )
+        except ObjectDoesNotExist as err:
+            return None
+        else:
+            conversation.question.add(message_model)
+            conversation.save()
+            return conversation
+
+    def _handle_text_type(self):
+        _m = bot_models.Message.objects.create(
+            message_id=self.message_id,
+            chat_id=self.chat_id,
+            from_id=self.user,
+            text=self.input_text,
+            message_type="TXT",
+        )
+        return self._handle_base_type(message_model=_m)
+
+    def _handle_photo_type(self):
+        photo = self.data.get("photo", None)[-1]
+        file = bot_models.File.objects.create(
+            file_id=photo.get("file_id"),
+            file_unique_id=photo.get("file_unique_id"),
+            file_type="PHO",
+        )
+        _m_dict = {
+            "message_id": self.message_id,
+            "chat_id": self.chat_id,
+            "from_id": self.user,
+            "message_type": "PHO",
+        }
+        caption = self.data.get("caption", None)
+        if caption:
+            _m_dict.update({"caption": caption})
+
+        _m = bot_models.Message.objects.create(**_m_dict)
+        _m.files.add(file)
+        _m.save()
+
+        return self._handle_base_type(message_model=_m)
+
+    def _handle_voice_type(self):
+        voice = self.data.get("voice", None)
+        file = bot_models.File.objects.create(
+            file_id=voice.get("file_id"),
+            file_unique_id=voice.get("file_unique_id"),
+            file_type="VOC",
+            duration=voice.get("duration"),
+        )
+        _m_dict = {
+            "message_id": self.message_id,
+            "chat_id": self.chat_id,
+            "from_id": self.user,
+            "message_type": "VOC",
+        }
+        caption = self.data.get("caption", None)
+        if caption:
+            _m_dict.update({"caption": caption})
+
+        _m = bot_models.Message.objects.create(**_m_dict)
+        _m.files.add(file)
+        _m.save()
+
+        return self._handle_base_type(message_model=_m)
+
+    def _handle_message(self):
+        message_type = self._get_message_type(self.data)
+        _handle_method = getattr(self, f"_handle_{message_type}_type")
+        conversation = _handle_method()
+        if not conversation:
+            self.send_error(StudentQuestionManager, chat_id=self.chat_id)
+
+        next_state = StudentQuestionConfirm(self._tlg_res, self.user)
+        next_message = next_state.get_message(conversation=conversation)
+
+        if message_type == "text":
+            self.send_text(next_message)
+        elif message_type == "voice":
+            self.send_voice(next_message)
+        elif message_type == "photo":
+            self.send_photo(next_message)
+        else:
+            pass
+
+        data = self._get_message_dict(chat_id=self.chat_id, message_id=self.message_id)
+        self.delete_message(data)
+
+        self._set_user_state(StudentQuestionConfirm)
+
+        return HttpResponse()
+
+
+class StudentQuestionConfirm(StudentQuestionBaseState):
+    name = "STDNT_question_confirm"
+    text = "تایید و ارسال"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_input_types = [self.CALLBACK_QUERY]
+        self.transition_method_name = self.TRANSITION_DEL_SEND
+
+    def get_message(self, conversation, chat_id=None):
+        # self.logger.error(f"{_c} {kwargs}")
+        data = conversation.question.all()[0].get_message_dict()
+        _list = [
+            [
+                (
+                    self.text,
+                    StudentQuestionManager.name,
+                    {"conversation": conversation.pk},
+                )
+            ],
+            [("تغییر پرسش", StudentQuestionCompose.name, "")],
+            [(StudentHome.text, StudentHome.name, "")],
+        ]
+        inline_keyboard = self._get_inline_keyboard_list(_list)
+        message = self._get_message_dict(
+            chat_id=chat_id, inline_keyboard=inline_keyboard, **data
+        )
+
+        return message
+
+    def _handle_callback_query(self):
+        _conv_id = self.callback_query_data.get("conversation", None)
+        if _conv_id and self.callback_query_next_state == StudentQuestionManager.name:
+            try:
+                conversation = conv_models.Conversation.objects.get(
+                    student__user=self.user, pk=_conv_id
+                )
+            except ObjectDoesNotExist as err:
+                text = "پرسش و پاسخ مورد نظر پیدا نشد."
+                message = self._get_message_dict(text=text, chat_id=self.chat_id)
+                self.transition(message=message)
+                msg = self._get_error_prefix()
+                msg += f"{self.user=}\t{_conv_id}"
+                self.logger.error(msg=msg)
+                return super()._handle_callback_query()
+            else:
+                _h = handlers.ConversationHandler(conversation)
+                _h.handle()
+
+                return HttpResponse("ok")
+
+        return super()._handle_callback_query()
 
 
 class StudentQuestionHistory(StudentBaseState):
@@ -792,6 +987,7 @@ class StudentQuestionHistory(StudentBaseState):
             StudentQuestionManager.name: StudentQuestionManager,
             StudentHome.name: StudentHome,
         }
+        self.expected_input_types.append(self.CALLBACK_QUERY)
 
     def get_message(self, chat_id=None):
         text = print_student_all_conversations(self.user)

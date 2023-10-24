@@ -1,6 +1,11 @@
+import random
+import string
+
 from django.db import models
 from bot import models as bot_models
 from user import models as usr_models
+
+random.random()
 
 
 class Subject(models.Model):
@@ -14,6 +19,7 @@ class Subject(models.Model):
     ]
     grade = models.CharField(max_length=5, choices=GRADE_CHOICES, default="ALL")
 
+    FIELDS = ("MTH", "BIO", "ECO", "GEN")
     FIELD_CHOICES = [
         ("MTH", "ریاضی"),
         ("BIO", "تجربی"),
@@ -26,11 +32,15 @@ class Subject(models.Model):
     def __str__(self) -> str:
         return f"{self.name} {self.get_grade_display()} {self.get_field_display()}"
 
+    def diplay_name_without_field(self):
+        return f"{self.name} {self.get_grade_display()}"
+
 
 class Teacher(models.Model):
     user = models.OneToOneField(usr_models.User, on_delete=models.CASCADE)
     subjects = models.ManyToManyField("Subject", blank=True)
 
+    permissions = models.TextField(default="")
     is_active = models.BooleanField(default=False)
     credit_card_number = models.CharField(max_length=16, null=True, blank=True)
 
@@ -64,7 +74,29 @@ class Student(models.Model):
 class Admin(models.Model):
     user = models.OneToOneField(usr_models.User, on_delete=models.CASCADE)
 
+    credit_card_number = models.CharField(max_length=16, null=True, blank=True)
+    permissions = models.TextField(default="")
     is_active = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return f"{self.user}"
+
+
+def generate_code():
+    letters = string.ascii_lowercase
+    word = "".join(random.choice(letters) for _ in range(5))
+    return word
+
+
+class SecretCode(models.Model):
+    code = models.CharField(max_length=5, default=generate_code, editable=False)
+    admin = models.ForeignKey(Admin, on_delete=models.CASCADE)
+    USAGE_CHOICES = [("ADMIN", "admin"), ("TCHER", "teacher")]
+    usage = models.CharField(max_length=5, choices=USAGE_CHOICES, default="ADMIN")
+    created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.code} by {self.admin.user} for {self.usage}"
+
+    def display_command(self):
+        return f"https://t.me/epsilonvibot?start=action_{self.get_usage_display()}_{self.code}"

@@ -1,0 +1,2 @@
+{'message_id': 270, 'from': {'id': 357394852, 'is_bot': False, 'first_name': 'Alireza', 'username': 'T_sam', 'language_code': 'en'}, 'chat': {'id': 357394852, 'first_name': 'Alireza', 'username': 'T_sam', 'type': 'private'}, 'date': 1696500712, 'text': '/start', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}
+True start

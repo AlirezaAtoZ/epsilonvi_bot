@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from django.http import HttpResponse
 from django.core.exceptions import ObjectDoesNotExist
@@ -14,19 +15,44 @@ class StateManager(object):
         "STDNT_error": student.StudentError,
         "STDNT_home": student.StudentHome,
         "STDNT_package_manager": student.StudentPackageManager,
-        "STDNT_new_package": student.StudentNewPackage,
-        "STDNT_new_package_confirm": student.StudentNewPackageConfirm,
         "STDNT_package_history": student.StudentPackageHistory,
         "STDNT_question_manager": student.StudentQuestionManager,
+        student.StudentPackageAdd.name: student.StudentPackageAdd,
+        student.StudentPackageConfirm.name: student.StudentPackageConfirm,
         "STDNT_new_question_choose": student.StudentNewQuestionChoose,
         "STDNT_new_question_confirm": student.StudentNewQuestionChoose,
-        "STDNT_new_question_compose": student.StudentNewQuestionCompose,
+        student.StudentQuestionAdd.name: student.StudentQuestionAdd,
+        student.StudentQuestionCompose.name: student.StudentQuestionCompose,
+        student.StudentQuestionConfirm.name: student.StudentQuestionConfirm,
         "STDNT_question_history": student.StudentQuestionHistory,
         "STDNT_edit_info": student.StudentEditInfo,
         "STDNT_edit_info_name": student.StudentEditInfoName,
         "STDNT_edit_info_phone_number": student.StudentEditInfoPhoneNumber,
         student.StudentEditInfoGrade.name: student.StudentEditInfoGrade,
-
+        admin.AdminHome.name: admin.AdminHome,
+        admin.AdminSendGroupMessage.name: admin.AdminSendGroupMessage,
+        admin.AdminSendGroupMessageConfirm.name: admin.AdminSendGroupMessageConfirm,
+        admin.AdminAdminManager.name: admin.AdminAdminManager,
+        admin.AdminAdminAdd.name: admin.AdminAdminAdd,
+        admin.AdminAdminList.name: admin.AdminAdminList,
+        admin.AdminAdminDetail.name: admin.AdminAdminDetail,
+        admin.AdminQuestionManager.name: admin.AdminQuestionManager,
+        admin.AdminQuestionList.name: admin.AdminQuestionList,
+        admin.AdminQuestionDetail.name: admin.AdminQuestionDetail,
+        admin.AdminQuestionDeny.name: admin.AdminQuestionDeny,
+        admin.AdminTeacherManager.name: admin.AdminTeacherManager,
+        admin.AdminTeacherAdd.name: admin.AdminTeacherAdd,
+        admin.AdminTeacherList.name: admin.AdminTeacherList,
+        admin.AdminTeacherDetail.name: admin.AdminTeacherDetail,
+        admin.AdminInfoManager.name: admin.AdminInfoManager,
+        admin.AdminInfoName.name: admin.AdminInfoName,
+        admin.AdminInfoPhoneNumber.name: admin.AdminInfoPhoneNumber,
+        admin.AdminInfoCreditCardNumber.name: admin.AdminInfoCreditCardNumber,
+        teacher.TeacherHome.name: teacher.TeacherHome,
+        teacher.TeacherInfoManager.name: teacher.TeacherInfoManager,
+        teacher.TeacherInfoName.name: teacher.TeacherInfoName,
+        teacher.TeacherInfoPhoneNumber.name: teacher.TeacherInfoPhoneNumber,
+        teacher.TeacherInfoCreditCard.name: teacher.TeacherInfoCreditCard,
     }
 
     def __init__(self, telegram_response_body) -> None:
@@ -90,6 +116,18 @@ class StateManager(object):
             return HttpResponse("Something went wrong")
 
         # self.logger.error(f"state handler {user}")
-        http_response = self.current_state(self._tlg_res, user).handle()
-
+        # TODO do it with RAM
+        if user.lock:
+            return HttpResponse()
+        else:
+            try:
+                user.lock = True
+                user.save()
+                http_response = self.current_state(self._tlg_res, user).handle()
+            except:
+                self.logger.error(traceback.print_exc())
+                return HttpResponse()
+            finally:
+                user.lock = False
+                user.save()
         return http_response
