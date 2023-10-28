@@ -2,16 +2,20 @@ version: '3.9'
 
 services:
   db:
-    image: "postgres:16-alpine"
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./data/db:/var/lib/postgresql/data
+    image: "mysql:8.1.0"
+    restart: always
     environment:
-      - POSTGRES_DB=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-  
+      - "MYSQL_DATABASE=${MYSQL_DATABASE}"
+      - "MYSQL_USER=${MYSQL_USER}"
+      - "MYSQL_PASSWORD=${MYSQL_PASSWORD}"
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+    ports:
+      - "${MYSQL_PORT}:${MYSQL_PORT}"
+    expose:
+      - "${MYSQL_PORT}"
+    volumes:
+      - "data:/var/lib/mysql"
+
   backend:
     build:
       context: app
@@ -19,8 +23,17 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - POSTGRES_NAME=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - "MYSQL_DATABASE=${MYSQL_DATABASE}"
+      - "MYSQL_USER=${MYSQL_USER}"
+      - "MYSQL_PASSWORD=${MYSQL_PASSWORD}"
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}"
+    volumes:
+      - type: bind
+        source: "~/Django/epsilonvi_bot/app/"
+        target: "/app"
     depends_on:
       - db
+
+volumes:
+  # app:
+  data:

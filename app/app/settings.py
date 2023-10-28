@@ -10,11 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, '.env'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -25,7 +29,7 @@ SECRET_KEY = 'django-insecure-@1j01@7t=1^3u5&$xcaaejztv6yb!$lkth+_fr%9l6o8qzq=(s
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['epsilonvi.ir', 'www.epsilonvi.ir']
 
 
 # Application definition
@@ -37,7 +41,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'user',
+    'bot',
+    'epsilonvi_bot',
+    'conversation',
+    'billing',
 ]
+
+AUTH_USER_MODEL = 'user.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -75,8 +86,12 @@ WSGI_APPLICATION = 'app.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ.get('MYSQL_DATABASE'),
+        'USER': os.environ.get('MYSQL_USER'),
+        'PASSWORD': os.environ.get('MYSQL_PASSWORD'),
+        'HOST': os.environ.get('MYSQL_HOST'),
+        'PORT': os.environ.get('MYSQL_PORT'),
     }
 }
 
@@ -116,6 +131,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = '/home/epsilonv/www/static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
