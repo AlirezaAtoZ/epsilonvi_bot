@@ -4,7 +4,7 @@ import json
 from django.http import HttpResponse
 from django.core.exceptions import ObjectDoesNotExist
 
-from .base import BaseState
+from .base import BaseState, MessageTypeMixin, ConversationDetailMixin
 from conversation import models as conv_models
 from conversation import handlers
 from bot import models as bot_models
@@ -82,7 +82,19 @@ def print_student_all_conversations(user):
     else:
         for idx, conv in enumerate(convs):
             status = "خاتمه یافته" if conv.is_done else "فعال"
-            t = f"{idx}- {conv.get_telegram_command()} {status} {conv.subject}\n"
+            t = f"{idx+1}- {conv.get_telegram_command()} {status} {conv.subject}\n"
+            text += t
+    return text
+
+
+def print_student_conversation(conersations_query):
+    text = ""
+    if conersations_query.count() == 0:
+        text = "تا کنون پرسشی پرسیده نشده.\n"
+    else:
+        for idx, conv in enumerate(conersations_query):
+            status = "خاتمه یافته" if conv.is_done else "فعال"
+            t = f"{idx+1}- {conv.get_telegram_command()} {status} {conv.subject}\n"
             text += t
     return text
 
@@ -128,6 +140,7 @@ class StudentError(BaseState):
         return HttpResponse("Something went wrong")
 
 
+# home
 class StudentHome(BaseState):
     name = "STDNT_home"
     text = "صفحه اصلی"
@@ -172,23 +185,12 @@ class StudentBaseState(BaseState):
         self.home_state = StudentHome
 
     def _get_home_and_back_inline_button(self, back_state):
-        btns = [
-            [
-                {
-                    "text": StudentHome.text,
-                    "callback_data": json.dumps(
-                        {"state": StudentHome.name, "data": ""}
-                    ),
-                }
-            ],
-            [
-                {
-                    "text": self.BACK_BTN_TEXT,
-                    "callback_data": json.dumps({"state": back_state.name, "data": ""}),
-                }
-            ],
+        _list = [
+            [[f"{StudentHome.text}", StudentHome.name, ""]],
+            [[f"{self.BACK_BTN_TEXT}", back_state.name, ""]],
         ]
-        return btns
+        inline_btns = self._get_inline_keyboard_list(_list)
+        return inline_btns
 
     def send_error(self, target_state, chat_id=None):
         _err_state = StudentError(self._tlg_res, self.user)
@@ -207,6 +209,7 @@ class StudentBaseState(BaseState):
         return HttpResponse()
 
 
+# info manager
 class StudentEditInfo(StudentBaseState):
     name = "STDNT_edit_info"
     text = "ویرایش مشحصات"
@@ -361,6 +364,7 @@ class StudentEditInfoGrade(StudentBaseState):
         return http_response
 
 
+# package manager
 class StudentPackageBaseState(StudentBaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
@@ -506,9 +510,8 @@ class StudentPackageAdd(StudentPackageBaseState):
         if self.callback_query_next_state == StudentPackageConfirm.name:
             _pid = self.callback_query_data.get("package", None)
             if _pid:
-                _q = conv_models.Package.objects.filter(pk=_pid)
-                if _q.exists():
-                    package = _q[0]
+                package = conv_models.Package.objects.filter(pk=_pid).first()
+                if package:
                     get_message_kwargs = {"package": package}
         elif self.callback_query_next_state == StudentPackageAdd.name:
             single = self.callback_query_data.get("single", None)
@@ -534,11 +537,12 @@ class StudentPackageConfirm(StudentPackageBaseState):
     def get_message(self, package, chat_id=None):
         text = "خرید پکیج:\n"
         text += f"{package.display_detailed()}"
+        pid = package.pk
         inline_keyboard = [
             [
                 {
                     "text": "انتقال به درگاه پرداخت",
-                    "url": "https://t.me/epsilonvibot?start=action_hello_world",
+                    "url": f"https://t.me/epsilonvibot?start=action_buy_{pid}",
                 }
             ],
         ]
@@ -571,6 +575,7 @@ class StudentPackageHistory(StudentBaseState):
         return message
 
 
+# question manager
 class StudentQuestionBaseState(StudentBaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
@@ -579,25 +584,31 @@ class StudentQuestionBaseState(StudentBaseState):
             StudentQuestionManager.name: StudentQuestionManager,
             StudentQuestionAdd.name: StudentQuestionAdd,
             StudentQuestionCompose.name: StudentQuestionCompose,
+            StudentQuestionConfirm.name: StudentQuestionConfirm,
+            StudentQuestionHistory.name: StudentQuestionHistory,
+            StudentQuestionDetail.name: StudentQuestionDetail,
+            StudentQuestionDeny.name: StudentQuestionDeny,
         }
 
 
-class StudentQuestionManager(StudentBaseState):
+class StudentQuestionManager(StudentQuestionBaseState):
     name = "STDNT_question_manager"
     text = "مدیریت پرسش و پاسخ"
 
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
         self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_states = {
-            StudentQuestionAdd.name: StudentQuestionAdd,
-            StudentNewQuestionChoose.name: StudentNewQuestionChoose,
-            StudentQuestionHistory.name: StudentQuestionHistory,
-            StudentHome.name: StudentHome,
-        }
 
     def get_message(self, chat_id=None):
-        text = print_student_unseen_conversations(user=self.user)
+        # text = print_student_unseen_conversations(user=self.user)
+        _q1 = conv_models.Conversation.objects.filter(
+            student=self.user.student, is_done=False
+        )
+        _q2 = conv_models.Conversation.objects.filter(
+            student=self.user.student, is_done=True
+        )
+        _q = _q1.union(_q2)
+        text = print_student_conversation(_q)
         _list = [
             [(StudentQuestionAdd.text, StudentQuestionAdd.name, "")],
             [(StudentQuestionHistory.text, StudentQuestionHistory.name, "")],
@@ -666,34 +677,31 @@ class StudentQuestionAdd(StudentQuestionBaseState):
         if self.callback_query_next_state == StudentQuestionAdd.name:
             _spid = self.callback_query_data.get("sp", None)
             if _spid:
-                _q = conv_models.StudentPackage.objects.filter(
+                student_package = conv_models.StudentPackage.objects.filter(
                     pk=_spid, student=self.user.student
-                )
-                if _q.exists():
-                    student_package = _q[0]
+                ).first()
+                if student_package:
                     get_message_kwargs = {"student_package": student_package}
         elif self.callback_query_next_state == StudentQuestionCompose.name:
             _spid = self.callback_query_data.get("sp", None)
             _subid = self.callback_query_data.get("s", None)
             if _spid and _subid:
-                _sp = conv_models.StudentPackage.objects.filter(
+                student_package = conv_models.StudentPackage.objects.filter(
                     pk=_spid,
                     student=self.user.student,
                     is_done=False,
-                )
-                if _sp.exists():
-                    student_package = _sp[0]
-                    _s = student_package.package.subjects.filter(pk=_subid)
-                    if _s.exists():
-                        subject = _s[0]
+                ).first()
+                if student_package:
+                    subject = student_package.package.subjects.filter(pk=_subid).first()
+                    if subject:
                         _c = conv_models.Conversation.objects.filter(
-                            student=self.user.student, conversation_state="ZERO"
-                        )
-                        _c.delete()
+                            student=self.user.student, conversation_state="Q-STDNT-DRFT"
+                        ).delete()
                         _ = conv_models.Conversation.objects.create(
                             student_package=student_package,
                             subject=subject,
                             student=self.user.student,
+                            conversation_state="Q-STDNT-DRFT",
                         )
 
         return super()._handle_callback_query(force_transition_type, get_message_kwargs)
@@ -789,7 +797,7 @@ class StudentNewQuestionChoose(StudentBaseState):
         return super()._handle_callback_query()
 
 
-class StudentQuestionCompose(StudentQuestionBaseState):
+class StudentQuestionCompose(MessageTypeMixin, StudentQuestionBaseState):
     name = "STDNT_question_compose"
     text = "نوشتن پرسش"
 
@@ -801,7 +809,7 @@ class StudentQuestionCompose(StudentQuestionBaseState):
         text = "سوال خود بپرسید:\n"
         text += "می توانید سوال خود را به صورت متن، عکس یا ویس (حداکثر ۶۰ ثانیه) ارسال کنید.\n"
         _list = [
-            [{f"{StudentHome.text}", StudentHome.name, ""}],
+            [(f"{StudentHome.text}", StudentHome.name, "")],
             [("تغییر مقطع درس یا بسته", StudentQuestionAdd.name, "")],
         ]
         inline_keyboard = self._get_inline_keyboard_list(_list)
@@ -810,90 +818,23 @@ class StudentQuestionCompose(StudentQuestionBaseState):
         )
         return message
 
-    def _get_message_type(self, message):
-        if type(message) != dict:
-            return False
-        if "text" in message.keys():
-            return "text"
-        elif "voice" in message.keys():
-            return "voice"
-        elif "photo" in message.keys():
-            return "photo"
-        else:
-            # not supported types
-            return "other"
-
     def _handle_other_type(self):
         return HttpResponse()
 
-    def _handle_base_type(self, message_model):
-        try:
-            conversation = conv_models.Conversation.objects.get(
-                student=self.user.student, conversation_state="ZERO"
-            )
-        except ObjectDoesNotExist as err:
-            return None
-        else:
-            conversation.question.add(message_model)
-            conversation.save()
-            return conversation
-
     def _handle_text_type(self):
-        _m = bot_models.Message.objects.create(
-            message_id=self.message_id,
-            chat_id=self.chat_id,
-            from_id=self.user,
-            text=self.input_text,
-            message_type="TXT",
+        return super()._handle_text_type(
+            self.message_id, self.chat_id, self.user, self.input_text
         )
-        return self._handle_base_type(message_model=_m)
 
     def _handle_photo_type(self):
-        photo = self.data.get("photo", None)[-1]
-        file = bot_models.File.objects.create(
-            file_id=photo.get("file_id"),
-            file_unique_id=photo.get("file_unique_id"),
-            file_type="PHO",
+        return super()._handle_photo_type(
+            self.data, self.message_id, self.chat_id, self.user
         )
-        _m_dict = {
-            "message_id": self.message_id,
-            "chat_id": self.chat_id,
-            "from_id": self.user,
-            "message_type": "PHO",
-        }
-        caption = self.data.get("caption", None)
-        if caption:
-            _m_dict.update({"caption": caption})
-
-        _m = bot_models.Message.objects.create(**_m_dict)
-        _m.files.add(file)
-        _m.save()
-
-        return self._handle_base_type(message_model=_m)
 
     def _handle_voice_type(self):
-        voice = self.data.get("voice", None)
-        file = bot_models.File.objects.create(
-            file_id=voice.get("file_id"),
-            file_unique_id=voice.get("file_unique_id"),
-            file_type="VOC",
-            duration=voice.get("duration"),
+        return super()._handle_voice_type(
+            self.data, self.message_id, self.chat_id, self.user
         )
-        _m_dict = {
-            "message_id": self.message_id,
-            "chat_id": self.chat_id,
-            "from_id": self.user,
-            "message_type": "VOC",
-        }
-        caption = self.data.get("caption", None)
-        if caption:
-            _m_dict.update({"caption": caption})
-
-        _m = bot_models.Message.objects.create(**_m_dict)
-        _m.files.add(file)
-        _m.save()
-
-        return self._handle_base_type(message_model=_m)
 
     def _handle_message(self):
         message_type = self._get_message_type(self.data)
@@ -913,6 +854,8 @@ class StudentQuestionCompose(StudentQuestionBaseState):
             self.send_photo(next_message)
         else:
             pass
+        _conv_hand = handlers.ConversationStateHandler(conversation)
+        _conv_hand.handle()  # Q-STDNT-DRFT -> Q-STDNT-COMP
 
         data = self._get_message_dict(chat_id=self.chat_id, message_id=self.message_id)
         self.delete_message(data)
@@ -933,7 +876,7 @@ class StudentQuestionConfirm(StudentQuestionBaseState):
 
     def get_message(self, conversation, chat_id=None):
         # self.logger.error(f"{_c} {kwargs}")
-        data = conversation.question.all()[0].get_message_dict()
+        data = conversation.question.all().first().get_message_dict()
         _list = [
             [
                 (
@@ -957,7 +900,7 @@ class StudentQuestionConfirm(StudentQuestionBaseState):
         if _conv_id and self.callback_query_next_state == StudentQuestionManager.name:
             try:
                 conversation = conv_models.Conversation.objects.get(
-                    student__user=self.user, pk=_conv_id
+                    student=self.user.student, pk=_conv_id
                 )
             except ObjectDoesNotExist as err:
                 text = "پرسش و پاسخ مورد نظر پیدا نشد."
@@ -968,25 +911,20 @@ class StudentQuestionConfirm(StudentQuestionBaseState):
                 self.logger.error(msg=msg)
                 return super()._handle_callback_query()
             else:
-                _h = handlers.ConversationHandler(conversation)
+                _h = handlers.ConversationStateHandler(conversation)
                 _h.handle()
 
-                return HttpResponse("ok")
+                return super()._handle_callback_query()
 
         return super()._handle_callback_query()
 
 
-class StudentQuestionHistory(StudentBaseState):
+class StudentQuestionHistory(StudentQuestionBaseState):
     name = "STDNT_question_history"
     text = "تاریخچه پرسش ها"
 
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
-        self.expected_states = {
-            StudentQuestionDetailed.name: StudentQuestionDetailed,
-            StudentQuestionManager.name: StudentQuestionManager,
-            StudentHome.name: StudentHome,
-        }
         self.expected_input_types.append(self.CALLBACK_QUERY)
 
     def get_message(self, chat_id=None):
@@ -998,9 +936,279 @@ class StudentQuestionHistory(StudentBaseState):
         return message
 
 
-class StudentQuestionDetailed(StudentBaseState):
+class StudentQuestionDetail(ConversationDetailMixin, StudentQuestionBaseState):
     name = "STDNT_question_detailed"
     text = "نمایش پرسش و پاسخ"
 
+    STUDENT_DENY_TEXT = "پاسخ واضح نیست"
+    STUDENT_REWRITE_TEXT = "ویرایش پرسش"
+
+    CONVERSATION_STATE_DRAFT = "Q-STDNT-DRFT"
+
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
+        self.expected_input_types = [self.CALLBACK_QUERY]
+
+    def get_messages(self, conversation: conv_models.Conversation, chat_id):
+        # get conversation quesion and answer messages
+        messages = self._get_conversation_messages(
+            conversation, state_object=self, chat_id=chat_id
+        )
+
+        _conv_hand = handlers.ConversationStateHandler(conversation)
+        # the last message text and default btns
+        text = "عملیات ها"
+        inline_btns = self._get_home_and_back_inline_button(StudentQuestionManager)
+        # if the question has denied by admin add admin response and re-write btn
+        if _conv_hand.is_student_denied():
+            # admin response text btns
+            text = "توضیحات ادمین:\n"
+            _m = conversation.denied_responses.all().last()
+            text += _m.text
+            btn = [
+                self.STUDENT_REWRITE_TEXT,
+                StudentQuestionCompose.name,
+                {"conversation": conversation.pk, "action": "re_write"},
+            ]
+            _list = [[btn]]
+            inline_btns = self._get_inline_keyboard_list(_list)
+            message = self._get_message_dict(
+                chat_id=chat_id, text=text, inline_keyboard=inline_btns
+            )
+            # add denied message to the conversations messages
+            messages.append({"message_type": "text", "message": message})
+        # elif conversation is answerded and student can deny the teacher answer
+        # add the "Understand" and "objection" btn to the last message
+        elif _conv_hand.is_waiting_on_student():
+            btn_appr = [
+                "متوجه شدم",
+                StudentQuestionManager.name,
+                {"conversation": conversation.pk, "action": "approve"},
+            ]
+            btn_dny = [
+                self.STUDENT_DENY_TEXT,
+                StudentQuestionDeny.name,
+                {"conversation": conversation.pk, "action": "deny"},
+            ]
+            _list = [[btn_appr], [btn_dny]]
+            inline_btns = self._get_inline_keyboard_list(_list) + inline_btns
+        message = self._get_message_dict(
+            text=text, inline_keyboard=inline_btns, chat_id=chat_id
+        )
+        # add the last message to the conversation messages
+        messages.append({"message_type": "text", "message": message})
+        return messages
+
+    def _handle_callback_query(self, force_transition_type=None, get_message_kwargs={}):
+        action = self.callback_query_data.get("action", None)
+        _cid = self.callback_query_data.get("conversation", None)
+        if action and _cid:
+            conversation = conv_models.Conversation.objects.filter(pk=_cid).first()
+
+            if (
+                conversation
+                and action == "re_write"
+                and self.callback_query_next_state == StudentQuestionCompose.name
+            ):
+                _conv_handle = handlers.ConversationStateHandler(conversation)
+                # delete all last un-composed conversations
+                _q = conv_models.Conversation.objects.filter(
+                    student=self.user.student,
+                    conversation_state=self.CONVERSATION_STATE_DRAFT,
+                ).delete()
+                _conv_handle.handle()  # Q-ADMIN-COMP -> Q-STDNT-DEND
+                _conv_handle.handle()  # Q-ADMIN-DEND -> Q-STDNT-DRFT
+            elif (
+                conversation
+                and action == "deny"
+                and self.callback_query_next_state == StudentQuestionDeny.name
+            ):
+                _conv_handle = handlers.ConversationStateHandler(conversation)
+                _conv_handle.handle("deny")  # A-ADMIN-APPR -> A-STDNT-DENY
+                _conv_handle.handle()  # A-STDNT-DENY -> RQ-STDNT-DRFT
+                get_message_kwargs = {"conversation": conversation}
+            elif (
+                conversation
+                and action == "approve"
+                and self.callback_query_next_state == StudentQuestionManager.name
+            ):
+                _conv_handle = handlers.ConversationStateHandler(conversation)
+                _conv_handle.handle("approve")  # A-ADMIN-APPR -> A-STDNT-APPR
+                _conv_handle.handle()  # A-STDNT-APPR -> C-CONVR-DONE
+
+        return super()._handle_callback_query(force_transition_type, get_message_kwargs)
+
+    def _handle_send_messages(
+        self, conversation: conv_models.Conversation, chat_id=None
+    ):
+        messages = self.get_messages(conversation=conversation, chat_id=chat_id)
+        ids = []
+        for m in messages:
+            message_type = m.get("message_type")
+            message = m.get("message")
+            method = getattr(self, f"send_{message_type}", self.send_unkown)
+            _m_id = method(message)
+            ids.append(_m_id)
+        self.save_message_ids(delete_ids=ids)
+        self._set_user_state(StudentQuestionDetail)
+
+        return HttpResponse("ok")
+
+
+class StudentQuestionDeny(MessageTypeMixin, StudentQuestionBaseState):
+    name = "STDNT_question_deny"
+    text = "اصلاح پرسش"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_input_types = [self.CALLBACK_QUERY, self.MESSAGE]
+
+    def _handle_base_type(self, user, message_model, conversation_id=None):
+        try:
+            if conversation_id:
+                conversation = conv_models.Conversation.objects.get(pk=conversation_id)
+                conversation.re_question.all().delete()
+            else:
+                conversation = conv_models.Conversation.objects.get(
+                    student=user.student, conversation_state="RQ-STDNT-DRFT"
+                )
+        except ObjectDoesNotExist as err:
+            return None
+        else:
+            conversation.re_question.all().delete()
+            conversation.re_question.add(message_model)
+            conversation.save()
+            return conversation
+
+    def get_message(self, conversation, chat_id=None):
+        text = (
+            "دلیل حود برای اعتراض به این پاسخ را به صورت متن، تصویر یا ویس بفرستید.\n"
+        )
+        btn = [
+            "انصراف / تایید پاسخ",
+            StudentQuestionManager.name,
+            {"conversation": conversation.pk},
+        ]
+        _list = [[btn]]
+        inline_btns = self._get_inline_keyboard_list(_list)
+        inline_btns += self._get_home_and_back_inline_button(StudentQuestionManager)
+        message = self._get_message_dict(
+            text=text, inline_keyboard=inline_btns, chat_id=chat_id
+        )
+        return message
+
+    def _handle_other_type(self):
+        return HttpResponse()
+
+    def _handle_text_type(self):
+        return super()._handle_text_type(
+            self.message_id, self.chat_id, self.user, self.input_text
+        )
+
+    def _handle_photo_type(self):
+        return super()._handle_photo_type(
+            self.data, self.message_id, self.chat_id, self.user
+        )
+
+    def _handle_voice_type(self):
+        return super()._handle_voice_type(
+            self.data, self.message_id, self.chat_id, self.user
+        )
+
+    def _handle_message(self):
+        message_type = self._get_message_type(self.data)
+        _handle_method = getattr(self, f"_handle_{message_type}_type")
+        conversation = _handle_method()
+        if not conversation:
+            self.send_error(StudentQuestionManager, chat_id=self.chat_id)
+
+        next_state = StudentQuestionDenyConfirm(self._tlg_res, self.user)
+        next_message = next_state.get_message(conversation=conversation)
+
+        if message_type == "text":
+            self.send_text(next_message)
+        elif message_type == "voice":
+            self.send_voice(next_message)
+        elif message_type == "photo":
+            self.send_photo(next_message)
+        else:
+            pass
+
+        data = self._get_message_dict(chat_id=self.chat_id, message_id=self.message_id)
+        self.delete_message(data)
+
+        self._set_user_state(StudentQuestionDenyConfirm)
+
+        return HttpResponse()
+
+    def _handle_callback_query(self, force_transition_type=None, get_message_kwargs={}):
+        _cid = self.callback_query_data.get("conversation", None)
+        if _cid and self.callback_query_next_state == StudentQuestionManager.name:
+            conversation = conv_models.Conversation.objects.filter(
+                pk=_cid, student=self.user.student
+            ).first()
+            if conversation:
+                _conv_hand = handlers.ConversationStateHandler(conversation)
+                _conv_hand._handle_a_stdnt_appr()  # -> C-CONVR-DONE
+        return super()._handle_callback_query(force_transition_type, get_message_kwargs)
+
+
+class StudentQuestionDenyConfirm(StudentQuestionBaseState):
+    name = "STDNT_question_deny_confirm"
+    text = "تایید و ارسال"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_input_types = [self.CALLBACK_QUERY]
+        self.transition_method_name = self.TRANSITION_DEL_SEND
+
+    def get_message(self, conversation, chat_id=None):
+        # self.logger.error(f"{_c} {kwargs}")
+        data = conversation.re_question.all().first().get_message_dict()
+        _list = [
+            [
+                (
+                    self.text,
+                    StudentQuestionManager.name,
+                    {"conversation": conversation.pk},
+                )
+            ],
+            [("تغییر پرسش", StudentQuestionDeny.name, "")],
+            [
+                (
+                    "انصراف / تایید پاسخ",
+                    StudentQuestionManager.name,
+                    {"conversation": conversation.pk, "action": "approve"},
+                )
+            ],
+            [(StudentHome.text, StudentHome.name, "")],
+        ]
+        inline_keyboard = self._get_inline_keyboard_list(_list)
+        message = self._get_message_dict(
+            chat_id=chat_id, inline_keyboard=inline_keyboard, **data
+        )
+
+        return message
+
+    def _handle_callback_query(self):
+        _conv_id = self.callback_query_data.get("conversation", None)
+        if _conv_id and self.callback_query_next_state == StudentQuestionManager.name:
+            conversation = conv_models.Conversation.objects.filter(
+                pk=_conv_id, student=self.user.student
+            ).first()
+            action = self.callback_query_data.get("action", None)
+            if conversation and not action:
+                _conv_hand = handlers.ConversationStateHandler(conversation)
+                _conv_hand.handle()  # RQ-STDNT-DRFT -> RQ-STDNT-COMP
+            elif conversation and action == "approve":
+                _conv_hand = handlers.ConversationStateHandler(conversation)
+                _conv_hand._handle_a_stdnt_appr()  # C-CNVR-DONE
+            else:
+                text = "پرسش و پاسخ مورد نظر پیدا نشد."
+                message = self._get_message_dict(text=text, chat_id=self.chat_id)
+                self.transition(message=message)
+                msg = self._get_error_prefix()
+                msg += f"{self.user=}\t{_conv_id}"
+                self.logger.error(msg=msg)
+
+        return super()._handle_callback_query()

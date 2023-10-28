@@ -100,3 +100,12 @@ class SecretCode(models.Model):
 
     def display_command(self):
         return f"https://t.me/epsilonvibot?start=action_{self.get_usage_display()}_{self.code}"
+
+
+class SpecialMessage(models.Model):
+    message = models.ForeignKey(
+        bot_models.Message, on_delete=models.CASCADE, blank=True, null=True
+    )
+    admin = models.ForeignKey(Admin, on_delete=models.CASCADE, blank=True, null=True)
+    is_sent = models.BooleanField(default=False)
+    description = models.TextField(blank=True, null=True)

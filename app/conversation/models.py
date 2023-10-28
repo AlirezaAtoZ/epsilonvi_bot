@@ -93,7 +93,7 @@ class StudentPackage(models.Model):
         return f"{self.package} {self.student.user} {self.asked_questions} of {self.package.number_of_questions}"
 
     def increase_asked(self):
-        if self.asked_questions < self.package.asked_questions:
+        if self.asked_questions < self.package.number_of_questions:
             self.asked_questions += 1
             return True
         else:
@@ -111,6 +111,9 @@ class Conversation(models.Model):
 
     admins = models.ManyToManyField(
         eps_models.Admin, related_name="all_ineracted_admins"
+    )
+    denied_responses = models.ManyToManyField(
+        bot_models.Message, related_name="denied_responses"
     )
 
     question = models.ManyToManyField(bot_models.Message, related_name="question")
@@ -153,9 +156,6 @@ class Conversation(models.Model):
         null=True,
     )
 
-    admin_response = models.ManyToManyField(
-        bot_models.Message, related_name="admin_response"
-    )
     working_admin = models.ForeignKey(
         eps_models.Admin,
         on_delete=models.CASCADE,
@@ -166,6 +166,9 @@ class Conversation(models.Model):
 
     rate = models.FloatField(null=True, blank=True)
     is_done = models.BooleanField(default=False)
+
+    student_denied = models.BooleanField(default=False)
+    teacher_denied = models.BooleanField(default=False)
 
     CONVERSATION_STATES = (
         ("Z-UNKWN-ZERO", ""),

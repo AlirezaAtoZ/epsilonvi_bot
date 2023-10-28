@@ -7,9 +7,9 @@ from django.core.exceptions import ObjectDoesNotExist
 from urllib3 import HTTPResponse
 
 from .states.base import BaseState
-from .states.student import StudentHome, StudentPackageManager
+from .states.student import StudentHome, StudentQuestionDetail
 from .states.admin import AdminHome, AdminQuestionDetail
-from .states.teacher import TeacherHome
+from .states.teacher import TeacherHome, TeacherQuestionDetail
 from .states.state_manager import StateManager
 from user import models as usr_models
 from epsilonvi_bot import models as eps_models
@@ -65,17 +65,20 @@ class Home(CommandBase):
         self.send_text(data=message)
         return HttpResponse()
 
-    def hello_world(self, value=None):
-        try:
-            pending_package = conv_models.StudentPackage.objects.get(
-                is_pending=True, student__user=self.user
+    def buy(self, value=None):
+        # self.logger.error(f"{value=}")
+        package = conv_models.Package.objects.filter(is_active=True, pk=value).first()
+        # self.logger.error(f"{package=}")
+        if package:
+            student_package = conv_models.StudentPackage.objects.create(
+                package=package,
+                student=self.user.student,
             )
-        except ObjectDoesNotExist as err:
-            pass
+            student_package.is_pending = False
+            student_package.save()
+            # self.logger.error(f"{student_package=}")
+
         # TODO check for zarinpal
-        else:
-            pending_package.is_pending = False
-            pending_package.save()
 
         return super().handle()
 
@@ -196,6 +199,16 @@ class Conversation(CommandBase):
 
     def _handle_admin_conversation_detail(self, conversation):
         _conv_dtl_state = AdminQuestionDetail(self._tlg_res, self.user)
+        http_response = _conv_dtl_state._handle_send_messages(conversation=conversation)
+        return http_response
+
+    def _handle_student_conversation_detail(self, conversation):
+        _conv_dtl_state = StudentQuestionDetail(self._tlg_res, self.user)
+        http_response = _conv_dtl_state._handle_send_messages(conversation=conversation)
+        return http_response
+
+    def _handle_teacher_conversation_detail(self, conversation):
+        _conv_dtl_state = TeacherQuestionDetail(self._tlg_res, self.user)
         http_response = _conv_dtl_state._handle_send_messages(conversation=conversation)
         return http_response
 

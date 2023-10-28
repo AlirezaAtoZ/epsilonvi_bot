@@ -1,23 +1,36 @@
 import json
-from re import S
-
 from django.http import HttpResponse
 from django.core.management import call_command
 
-from .base import BaseState, EditModelMixin, ButtonsListMixin, SecretCodeMixin
+from .base import (
+    BaseState,
+    ConversationDetailMixin,
+    EditModelMixin,
+    ButtonsListMixin,
+    SecretCodeMixin,
+    MessageTypeMixin,
+)
 from epsilonvi_bot import permissions as perm
 from epsilonvi_bot import models as eps_models
 from bot import models as bot_models
-from bot.utils import send_group_message
+from bot import utils
 from conversation import models as conv_models
+from conversation.handlers import ConversationStateHandler
 
 
 def get_conversation_list_display(conversatoins_query):
     if conversatoins_query.count() == 0:
         return "سوالی وجود ندارد.\n"
     text = ""
+    help_dict = {
+        "Q-STDNT-COMP": "سوال",
+        "RQ-STDNT-COMP": "اعتراض",
+        "A-TCHER-COMP": "پاسخ",
+        "RA-TCHER-COMP": "پاسح به اعتراض",
+    }
     for c in conversatoins_query:
-        l = f"{c.get_telegram_command()} - {c.subject}\n"
+        _text = help_dict.get(c.conversation_state, "UNKNWN")
+        l = f"{c.get_telegram_command()} - {c.subject} {_text}\n"
         text += l
     return text
 
@@ -149,6 +162,7 @@ class AdminBaseState(BaseState):
         return super().handle()
 
 
+# admin home
 class AdminHome(AdminBaseState):
     name = "ADMIN_home"
     text = "صفحه اصلی"
@@ -186,7 +200,8 @@ class AdminHome(AdminBaseState):
         return message
 
 
-class AdminSendGroupMessage(AdminBaseState):
+# group message
+class AdminSendGroupMessage(MessageTypeMixin, AdminBaseState):
     name = "ADMIN_send_group_message"
     text = "ارسال پیام گروهی"
 
@@ -200,48 +215,59 @@ class AdminSendGroupMessage(AdminBaseState):
         }
 
     def get_message(self, chat_id=None):
-        text = "پیام خود را ارسال کنید"
+        text = "پیام خود را ارسال کنید (تصویر یا متن)"
         inline_keyboard = self._get_default_buttons()
         message = self._get_message_dict(
             chat_id=chat_id, text=text, inline_keyboard=inline_keyboard
         )
         return message
 
-    def _handle_message_text_type(self):
-        next_state = AdminSendGroupMessageConfirm(self._tlg_res, self.user)
-        current_message = self.get_current_message_dict()
-
-        next_message = next_state.get_message(
-            chat_id=self.chat_id,
-            input_message=current_message,
+    def _handle_base_type(self, user, message_model):
+        special_message = eps_models.SpecialMessage.objects.create(
+            message=message_model,
+            admin=user.admin,
         )
-        self.transition(
-            message=next_message, force_transition_type=self.TRANSITION_DEL_SEND
+        return special_message
+
+    def _handle_text_type(self):
+        return super()._handle_text_type(
+            self.message_id, self.chat_id, self.user, self.input_text
         )
 
-        return HttpResponse("ok"), next_state
-
-    def _handle_message_unkown_type(self):
-        return HttpResponse("unknown_type"), self
+    def _handle_photo_type(self):
+        return super()._handle_photo_type(
+            self.data, self.message_id, self.chat_id, self.user
+        )
 
     def _handle_message(self):
-        # next_state = AdminSendGroupMessageConfirm(self._tlg_res, self.user)
-        self.input_message_type = "text"
+        self.input_message_type = self._get_message_type(self.data)
         handle_message_method = getattr(
             self,
-            f"_handle_message_{self.input_message_type}_type",
-            self._handle_message_unkown_type,
+            f"_handle_{self.input_message_type}_type",
+            self._handle_other_type,
         )
-        http_response, next_state = handle_message_method()
+        special_message = handle_message_method()
+        if not special_message:
+            return self.message_error()
+        # delete usermessage
+        data = self._get_message_dict(message_id=self.message_id)
+        self.delete_message(data)
+        # get next state message
+        next_state = AdminSendGroupMessageConfirm(self._tlg_res, self.user)
+        next_message = next_state.get_message(special_message)
+        # find suitable send method and send next message
+        send_method = getattr(self, f"send_{self.input_message_type}")
+        send_method(next_message)
+        # change user state
         check = self._set_user_state(next_state=next_state)
         if not check:
             msg = self._get_error_prefix()
             msg += f"{next_state=}\t{handle_message_method=}"
             self.logger.error(msg=msg)
-        return http_response
+        return HttpResponse("ok")
 
 
-class AdminSendGroupMessageConfirm(AdminBaseState):
+class AdminSendGroupMessageConfirm(MessageTypeMixin, AdminBaseState):
     name = "ADMIN_send_group_message_confirm"
     text = "تایید و ارسال"
 
@@ -258,27 +284,70 @@ class AdminSendGroupMessageConfirm(AdminBaseState):
             AdminSendGroupMessage.name: AdminSendGroupMessage,
         }
 
-    def get_message(self, input_message: dict, chat_id=None):
+    def get_message(self, special_message, chat_id=None):
         _list = [
-            [(self.text, AdminHome.name, self.SUCCESS_CODE)],
+            [
+                (
+                    f"ارسال به دانش آموزان",
+                    AdminHome.name,
+                    {"target": "students", "sm": special_message.pk},
+                )
+            ],
+            [
+                (
+                    f"ارسال به دبیران",
+                    AdminHome.name,
+                    {"target": "teachers", "sm": special_message.pk},
+                )
+            ],
+            [
+                (
+                    f"ارسال به ادمین ها",
+                    AdminHome.name,
+                    {"target": "admins", "sm": special_message.pk},
+                )
+            ],
         ]
         inline_keyboard = self._get_inline_keyboard_list(_list)
         inline_keyboard += self._get_default_buttons(AdminSendGroupMessage)
         message = self._get_message_dict(
-            inline_keyboard=inline_keyboard, **input_message
+            inline_keyboard=inline_keyboard,
+            **special_message.message.get_message_dict(),
+            chat_id=chat_id,
         )
         return message
 
     def _handle_callback_query(self):
-        if self.callback_query_data == self.SUCCESS_CODE:
-            message = self.get_current_message_dict()
-            send_group_message(message=message)
-            self.logger.error(f"group_message: {message}")
+        target = self.callback_query_data.get("target", None)
+        _sm = self.callback_query_data.get("sm", None)
+        _q = eps_models.SpecialMessage.objects.filter(pk=_sm)
+        if not _q.exists():
+            return super()._handle_callback_query()
+        else:
+            special_message = _q[0]
+        if target == "students":
+            audience = eps_models.Student.objects.all()
+        elif target == "teachers":
+            audience = eps_models.Teacher.objects.filter(is_active=True)
+        elif target == "admins":
+            audience = eps_models.Admin.objects.filter(is_active=True)
+        else:
+            return super()._handle_callback_query()
+        users = []
+        for a in audience:
+            users.append(a.user)
+        utils.send_group_message(
+            special_message.message.get_message_dict(),
+            users,
+            message_type=special_message.message.message_type,
+        )
+
         return super()._handle_callback_query(
             force_transition_type=self.TRANSITION_DEL_SEND
         )
 
 
+# admin manager
 class AdminAdminBaseState(AdminBaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
@@ -447,7 +516,20 @@ class AdminAdminDetail(AdminAdminBaseState):
         return super()._handle_callback_query(force_transition_type, get_message_kwargs)
 
 
-class AdminQuestionManager(AdminBaseState):
+# question manager
+class AdminQuestionBaseState(AdminBaseState):
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_states = {
+            AdminHome.name: AdminHome,
+            AdminQuestionManager.name: AdminQuestionManager,
+            AdminQuestionList.name: AdminQuestionList,
+            AdminQuestionDetail.name: AdminQuestionDetail,
+            AdminQuestionDeny.name: AdminQuestionDeny,
+        }
+
+
+class AdminQuestionManager(AdminQuestionBaseState):
     name = "ADMIN_question_manager"
     text = "مدیریت سوال ها"
 
@@ -455,11 +537,6 @@ class AdminQuestionManager(AdminBaseState):
         super().__init__(telegram_response_body, user)
 
         self.expected_input_types.append(self.CALLBACK_QUERY)
-
-        self.expected_states = {
-            AdminQuestionList.name: AdminQuestionList,
-            AdminHome.name: AdminHome,
-        }
 
         self.permissions += [
             perm.CanApproveConversation,
@@ -476,7 +553,7 @@ class AdminQuestionManager(AdminBaseState):
         return message
 
 
-class AdminQuestionList(AdminBaseState):
+class AdminQuestionList(AdminQuestionBaseState):
     name = "ADMIN_question_list"
     text = "لیست سوال ها"
 
@@ -484,29 +561,17 @@ class AdminQuestionList(AdminBaseState):
         super().__init__(telegram_response_body, user)
         self.expected_input_types.append(self.CALLBACK_QUERY)
 
-        self.expected_states = {
-            AdminQuestionManager.name: AdminQuestionManager,
-            AdminQuestionList.name: AdminQuestionList,
-            AdminQuestionDetail.name: AdminQuestionDetail,
-            AdminHome.name: AdminHome,
-        }
-
         self.permissions += [perm.CanApproveConversation]
 
     def get_message(
         self,
         chat_id=None,
-        filters=[
-            {"conversation_state__endswith": "-ADMIN"},
-        ],
     ):
-        _q = conv_models.Conversation.objects.all()
-        for f in filters:
-            _q = _q.filter(**f)
-
+        _q = conv_models.Conversation.objects.filter(
+            conversation_state__endswith="COMP"
+        ).exclude(conversation_state__contains="ADMIN")
         text = "در انتظار بررسی\n"
         text += get_conversation_list_display(_q)
-        _list = []
         inline_keyboard = self._get_default_buttons(AdminQuestionManager)
         message = self._get_message_dict(
             text=text, chat_id=chat_id, inline_keyboard=inline_keyboard
@@ -514,7 +579,7 @@ class AdminQuestionList(AdminBaseState):
         return message
 
 
-class AdminQuestionDetail(AdminBaseState):
+class AdminQuestionDetail(ConversationDetailMixin, AdminQuestionBaseState):
     name = "ADMIN_question_detail"
     text = "مشاهده سوال"
 
@@ -525,48 +590,24 @@ class AdminQuestionDetail(AdminBaseState):
         super().__init__(telegram_response_body, user)
         self.expected_input_types.append(self.CALLBACK_QUERY)
 
-        self.expected_states = {
-            AdminQuestionManager.name: AdminQuestionList,
-            AdminQuestionList.name: AdminQuestionList,
-            AdminQuestionDetail.name: AdminQuestionDetail,
-            AdminHome.name: AdminHome,
-        }
-
         self.permissions += [perm.CanApproveConversation]
 
-    def _get_conversation_messages(self, conversation):
-        _conv = conversation
-        _ques = _conv.question.all()[0]  # more than one message allowed
-        _q = _conv.answer.all()
-        _answ = _q[0] if _q.exists() else None
-        _q = _conv.re_question.all()
-        _ques_re = _q[0] if _q.exists() else None
-        _q = _conv.re_answer.all()
-        _answ_re = _q[0] if _q.exists() else None
+    def get_messages(
+        self, conversation: conv_models.Conversation, chat_id=None
+    ) -> list:
+        # get conversation messages
+        messages = self._get_conversation_messages(
+            conversation=conversation, state_object=self, chat_id=chat_id
+        )
 
-        messages = []
-        for m in [_ques, _answ, _ques_re, _answ_re]:
-            if not m:
-                break
-            # self.logger.error(f"{m=}")
-            # self.logger.error(f"{m.get_message_dict()=}")
-            # self.logger.error(f"{m.message_type=}")
-            message = self._get_message_dict(
-                chat_id=self.chat_id, **m.get_message_dict()
-            )
-            _item = {"message_type": m.get_message_type_display(), "message": message}
-            messages.append(_item)
-        return messages
-
-    def get_messages(self, conversation, chat_id=None) -> list:
-        self.logger.error(f"{conversation=}")
-        messages = self._get_conversation_messages(conversation=conversation)
         _list = []
-        if conversation.conversation_state[-5:] == "ADMIN":
+        _ch = ConversationStateHandler(conversation)
+        # the conversation is waiting for admin's response
+        if _ch.is_waiting_on_admin():
             btns = [
                 (
                     self.APPROVE_BUTTON,
-                    AdminQuestionDetail.name,
+                    AdminQuestionList.name,
                     {"c_id": conversation.pk, "action": "appr"},
                 ),
                 (
@@ -575,8 +616,15 @@ class AdminQuestionDetail(AdminBaseState):
                     {"c_id": conversation.pk, "action": "deny"},
                 ),
             ]
+            # add buttons to the last message btns
             _list.append(btns)
-        text = "عملیات ها"
+        # display conversation info in last message
+        text = "اطلاعات این مکالمه:\n"
+        text += f"دانش آموز: {conversation.student}\n"
+        text += f"دبیر: {conversation.teacher}\n" if conversation.teacher else ""
+        text += f"درس: {conversation.subject}\n"
+
+        text += "عملیات ها:\n"
         inline_keyboard = self._get_inline_keyboard_list(_list)
         inline_keyboard += self._get_default_buttons(AdminQuestionManager)
         last_message = self._get_message_dict(
@@ -586,18 +634,13 @@ class AdminQuestionDetail(AdminBaseState):
         return messages
 
     def _handle_send_messages(self, conversation):
-        # self.logger.error(self._get_error_prefix())
         messages = self.get_messages(conversation=conversation)
         ids = []
         for m in messages:
-            # self.logger.error(f"{m=}")
             message_type = m.get("message_type")
-            # self.logger.error(f"{message_type=}")
             message = m.get("message")
-            # self.logger.error(f"{message=}")
             method = getattr(self, f"send_{message_type}", self.send_unkown)
             _m_id = method(message)
-            # self.logger.error(f"{_m_id=}")
             ids.append(_m_id)
         self.save_message_ids(delete_ids=ids)
         self._set_user_state(AdminQuestionDetail)
@@ -606,45 +649,48 @@ class AdminQuestionDetail(AdminBaseState):
 
     def _handle_callback_query(self, force_transition_type=None):
         if (
-            self.callback_query_next_state == AdminQuestionDetail.name
+            self.callback_query_next_state == AdminQuestionList.name
             or self.callback_query_next_state == AdminQuestionDeny.name
         ):
             _cb_data = self.callback_query_data
             _action = _cb_data.get("action", None)
             _c_id = _cb_data.get("c_id", None)
-            _q = conv_models.Conversation.objects.filter(pk=_c_id)
-            conversation = _q[0] if _q.exists else None
+            conversation = conv_models.Conversation.objects.filter(pk=_c_id).first()
 
             if not conversation:
                 return self.message_error()
             if not _action or not _c_id:
                 return self.message_error()
 
-            _cs = conversation.conversation_state.split("-")[0]
-            _help = {
-                "Q": "question",
-                "A": "answer",
-                "RQ": "re_question",
-                "RA": "re_answer",
-            }
+            _conv_hand = ConversationStateHandler(conversation)
 
-            if _action == "appr" and conversation.conversation_state[-5:] == "ADMIN":
-                conversation.set_next_state()
+            if (
+                _action == "appr"
+                and _conv_hand.is_waiting_on_admin()
+                and self.callback_query_next_state == AdminQuestionList.name
+            ):
+                # set the coversation state
+                _conv_hand.handle(
+                    "approve"
+                )  # Q-STDNT-COMP -> Q-ADMIN-APPR | A-TCHER-COMP -> A-ADMIN-APPR | RQ-STDNT-COMP -> RQ-ADMIN_APPR | RA-TCHER-COMP ->RA-ADMIN-APPR
+                # add admin to the list of admins which has been contributed to the conversation
                 conversation.admins.add(self.user.admin)
-                setattr(conversation, f"{_help[_cs]}_approved_by", self.user.admin)
+                # TODO add approved by admin
                 conversation.save()
+                # delete last messages
                 self._handle_delete_messages()
-                next_state = AdminQuestionList(self._tlg_res, self.user)
-                self._set_user_state(next_state=next_state)
-                next_message = next_state.get_message()
-                self.send_text(next_message)
-                return HttpResponse("ok")
+                # continiue
 
-            elif _action == "deny" and conversation.conversation_state[-5:] == "ADMIN":
-                # conversation.set_prev_state()
+            elif _action == "deny" and _conv_hand.is_waiting_on_admin():
+                _conv_hand.handle(
+                    "deny"
+                )  # Q-STDNT-COMP -> Q-ADMIN-DENY | A-TCHER-COMP -> A-ADMIN-DENY | RQ-STDNT-COMP -> RQ-ADMIN_DENY | RA-TCHER-COMP ->RA-ADMIN-DENY
+                _conv_hand.handle()  # Q-ADMIN-DENY -> Q-ADMIN-DRFT | A-ADMIN-DENY -> A-ADMIN-DRFT | RQ-ADMIN_DENY -> RQ-ADMIN-DRFT | RA-ADMIN-DENY -> RA-ADMIN-DRFT
+                # add admin to the list of admins which has been contributed to the conversation
                 conversation.admins.add(self.user.admin)
                 conversation.working_admin = self.user.admin
                 conversation.save()
+                return super()._handle_callback_query()
 
             else:
                 return self.message_error()
@@ -653,7 +699,7 @@ class AdminQuestionDetail(AdminBaseState):
             return super()._handle_callback_query(force_transition_type)
 
 
-class AdminQuestionDeny(AdminBaseState):
+class AdminQuestionDeny(AdminQuestionBaseState):
     name = "ADMIN_question_deny"
     text = "به صورت مختصر دلیل رد این پرسش یا پاسخ را توضیح دهید (فقط متن)."
 
@@ -661,18 +707,11 @@ class AdminQuestionDeny(AdminBaseState):
         super().__init__(telegram_response_body, user)
         self.expected_input_types.append(self.MESSAGE)
 
-        self.expected_states = {
-            AdminQuestionManager.name: AdminQuestionList,
-            AdminQuestionList.name: AdminQuestionList,
-            AdminQuestionDetail.name: AdminQuestionDetail,
-            AdminHome.name: AdminHome,
-        }
-
         self.permissions += [perm.CanApproveConversation]
 
     def get_message(self, chat_id=None):
         text = self.text
-        return self._get_message_dict(text=text)
+        return self._get_message_dict(text=text, chat_id=chat_id)
 
     def _handle_message(self):
         _m = bot_models.Message.objects.create(
@@ -689,16 +728,23 @@ class AdminQuestionDeny(AdminBaseState):
             msg += f"admin got more than one working converstation {self.user}"
             self.logger.error(msg=msg)
         conversation = _q[0]
-        conversation.admin_response.add(_m)
+        _conv_hand = ConversationStateHandler(conversation)
+        _conv_hand.handle() # Q-ADMIN-DRFT -> Q-ADMIN-COMP | A-ADMIN-DRFT -> A-ADMIN-COMP | RQ-ADMIN-DRFT -> RQ-ADMIN-COMP | RA-ADMIN-DRFT -> RA-ADMIN-COMP
+        # add new reponse to the conversation responses
+        conversation.denied_responses.add(_m)
+        # remove convresation working admin
         conversation.working_admin = None
-        conversation.set_prev_state()
+
         conversation.save()
+
         self._handle_delete_messages()
         data = self._get_message_dict(message_id=self.message_id)
         self.delete_message(data)
+
         return HttpResponse("ok")
 
 
+# teacher manager
 class AdminTeacherBaseState(AdminBaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
@@ -965,6 +1011,7 @@ class AdminTeacherDetail(AdminTeacherBaseState):
         return super()._handle_callback_query(force_transition_type, get_message_kwargs)
 
 
+# info manager
 class AdminInfoBaseState(AdminBaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)

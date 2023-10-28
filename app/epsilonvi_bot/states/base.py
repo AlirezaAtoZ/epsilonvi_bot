@@ -2,7 +2,6 @@ import os
 import logging
 import json
 import requests
-import zlib
 from datetime import datetime
 
 from django.http import HttpResponse
@@ -11,6 +10,7 @@ from django.core.management import call_command
 
 from bot import models as bot_models
 from epsilonvi_bot import models as eps_models
+from conversation import models as conv_models
 from user.models import User
 
 
@@ -505,3 +505,145 @@ class SecretCodeMixin(ButtonsListMixin):
             chat_id=chat_id,
         )
         return message
+
+
+class MessageTypeMixin(object):
+    def _get_message_type(self, message):
+        if type(message) != dict:
+            return False
+        if "text" in message.keys():
+            return "text"
+        elif "voice" in message.keys():
+            return "voice"
+        elif "photo" in message.keys():
+            return "photo"
+        else:
+            # not supported types
+            return "other"
+
+    def _handle_base_type(self, user, message_model, conversation_id=None):
+        try:
+            if conversation_id:
+                conversation = conv_models.Conversation.objects.get(pk=conversation_id)
+                conversation.question.all().delete()
+            else:
+                conversation = conv_models.Conversation.objects.get(
+                    student=user.student, conversation_state="Q-STDNT-DRFT"
+                )
+        except ObjectDoesNotExist as err:
+            return None
+        else:
+            conversation.question.all().delete()
+            conversation.question.add(message_model)
+            conversation.save()
+            return conversation
+
+    def _handle_text_type(
+        self, message_id, chat_id, user, input_text, conversation_id=None
+    ):
+        _m = bot_models.Message.objects.create(
+            message_id=message_id,
+            chat_id=chat_id,
+            from_id=user,
+            text=input_text,
+            message_type="TXT",
+        )
+        return self._handle_base_type(
+            user, message_model=_m, conversation_id=conversation_id
+        )
+
+    def _handle_photo_type(self, data, message_id, chat_id, user, conversation_id=None):
+        photo = data.get("photo", None)[-1]
+        file = bot_models.File.objects.create(
+            file_id=photo.get("file_id"),
+            file_unique_id=photo.get("file_unique_id"),
+            file_type="PHO",
+        )
+        _m_dict = {
+            "message_id": message_id,
+            "chat_id": chat_id,
+            "from_id": user,
+            "message_type": "PHO",
+        }
+        caption = data.get("caption", None)
+        if caption:
+            _m_dict.update({"caption": caption})
+
+        _m = bot_models.Message.objects.create(**_m_dict)
+        _m.files.add(file)
+        _m.save()
+
+        return self._handle_base_type(
+            user, message_model=_m, conversation_id=conversation_id
+        )
+
+    def _handle_voice_type(self, data, message_id, chat_id, user, conversation_id=None):
+        voice = data.get("voice", None)
+        file = bot_models.File.objects.create(
+            file_id=voice.get("file_id"),
+            file_unique_id=voice.get("file_unique_id"),
+            file_type="VOC",
+            duration=voice.get("duration"),
+        )
+        _m_dict = {
+            "message_id": message_id,
+            "chat_id": chat_id,
+            "from_id": user,
+            "message_type": "VOC",
+        }
+        caption = data.get("caption", None)
+        if caption:
+            _m_dict.update({"caption": caption})
+
+        _m = bot_models.Message.objects.create(**_m_dict)
+        _m.files.add(file)
+        _m.save()
+
+        return self._handle_base_type(
+            user, message_model=_m, conversation_id=conversation_id
+        )
+
+    def _handle_other_type(self):
+        return None
+
+
+class ConversationDetailMixin:
+    def __get_conversation_messages_dict(self, conversation: conv_models.Conversation):
+        _dict = {
+            "question": conversation.question.all(),
+            "answer": conversation.answer.all(),
+            "re_question": conversation.re_question.all(),
+            "re_answer": conversation.re_answer.all(),
+            "denied_responses": conversation.denied_responses.all(),
+        }
+        return _dict
+
+    def _get_conversation_messages(
+        self, conversation: conv_models.Conversation, state_object, chat_id
+    ):
+        help_dict = {
+            "question": "پرسش",
+            "answer": "پاسخ",
+            "re_question": "ادامه پرسش",
+            "re_answer": "پاسخ تکمیلی",
+            "denied_responses": "توضیحات ادمین",
+        }
+
+        _mess = self.__get_conversation_messages_dict(conversation)
+        _output = []
+        for k, messages in _mess.items():
+            if k == "denied_responses":
+                continue
+            for m in messages:
+                message = state_object._get_message_dict(
+                    chat_id=chat_id, **m.get_message_dict()
+                )
+                _item = {
+                    "message_type": m.get_message_type_display(),
+                    "message": message,
+                }
+                _output.append(_item)
+        return _output
+
+    def get_messages(self, conversation: conv_models.Conversation, chat_id):
+        return []
