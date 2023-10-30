@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+from distutils.util import strtobool
 import os
 from pathlib import Path
 
@@ -140,6 +141,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # Telegram Tokens
-IS_DEV = bool(os.environ.get("DEVELOPE"))
+IS_DEV = bool(strtobool(os.environ.get("DEVELOPE")))
 TELEGRAM_BOT_TOKEN = os.environ.get("EPSILONVI_BOT_TOKEN") if not IS_DEV else os.environ.get("EPSILONVI_DEV_BOT_TOKEN")
 TELEGRAM_SECRET_CODE = os.environ.get("EPSILONVI_SECRET_TOKEN") if not IS_DEV else os.environ.get("EPSILONVI_DEV_SECRET_TOKEN")
