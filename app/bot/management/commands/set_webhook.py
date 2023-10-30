@@ -7,7 +7,6 @@ import requests
 
 class Command(BaseCommand):
     help = "sets the webhook url"
-    # TODO: softcode it!
 
     secret_token = settings.TELEGRAM_SECRECT_CODE
     base_url = "https://epsilonvi.ir"
