@@ -24,7 +24,7 @@ def webhook(request):
         logger = logging.getLogger(__name__)
         logger.error(f"{request.headers=}")
         return HttpResponseForbidden("no secret token was provided.")
-    elif settings.TELEGRAM_SECRECT_CODE != request.META.get(
+    elif settings.TELEGRAM_SECRET_CODE != request.META.get(
         "HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN"
     ):
         # logger = logging.getLogger(__name__)

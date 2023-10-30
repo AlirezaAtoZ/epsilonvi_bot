@@ -8,7 +8,7 @@ import requests
 class Command(BaseCommand):
     help = "sets the webhook url"
 
-    secret_token = settings.TELEGRAM_SECRECT_CODE
+    secret_token = settings.TELEGRAM_SECRET_CODE
     base_url = "https://epsilonvi.ir"
     url = base_url + "/dev" if settings.IS_DEV else base_url
     webhook_url = url + reverse("bot-webhook")
