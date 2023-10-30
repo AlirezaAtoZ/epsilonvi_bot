@@ -1,6 +1,7 @@
 # virtual envionment files
 venv/**
 venv/
+*.env
 
 # migration files
 **/migrations/**
