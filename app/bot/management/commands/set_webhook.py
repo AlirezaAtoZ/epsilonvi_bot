@@ -1,6 +1,7 @@
 from typing import Any
 from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
+from django.urls import reverse
 import requests
 
 
@@ -9,9 +10,10 @@ class Command(BaseCommand):
     # TODO: softcode it!
 
     secret_token = settings.TELEGRAM_SECRECT_CODE
-    webhook_url = (
-        f"https://epsilonvi.ir/bot-webhook-2ee122b7-5da0-4d9e-981f-d57d0e4103e2"
-    )
+    base_url = "https://epsilonvi.ir"
+    url = base_url + "/dev" if settings.IS_DEV else base_url
+    webhook_url = url + reverse("bot-webhook")
+
     set_webhook_url = f'https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/setWebhook'
     params = {"url": webhook_url, "secret_token": secret_token}
 

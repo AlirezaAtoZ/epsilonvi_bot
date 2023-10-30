@@ -14,11 +14,12 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+import os
 from django.contrib import admin
 from django.urls import path
 from epsilonvi_bot import views as eps_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('bot-webhook-2ee122b7-5da0-4d9e-981f-d57d0e4103e2', eps_views.webhook, name='bot-webhook'),
+    path(f'{os.environ.get("WEBHOOK_PATH")}', eps_views.webhook, name='bot-webhook'),
 ]
