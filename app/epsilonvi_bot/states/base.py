@@ -4,6 +4,7 @@ import json
 import requests
 from datetime import datetime
 
+from django.conf import settings
 from django.http import HttpResponse
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.management import call_command
@@ -177,7 +178,7 @@ class BaseState:
             "photo": "sendPhoto",
         }
         method = TELEGRAM_METHODS[url_type]
-        url = f'https://api.telegram.org/bot{os.environ.get("EPSILONVI_BOT_TOKEN")}/{method}'
+        url = f'https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/{method}'
         return url
 
     def _check_response(self, response, data):

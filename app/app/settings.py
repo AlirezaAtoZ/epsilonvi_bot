@@ -137,3 +137,8 @@ STATIC_ROOT = '/home/epsilonv/www/static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Telegram Tokens
+TELEGRAM_BOT_TOKEN = os.environ.get("EPSILONVI_BOT_TOKEN")
+TELEGRAM_SECRECT_CODE = os.environ.get("EPSILONVI_SECRET_TOKEN")
