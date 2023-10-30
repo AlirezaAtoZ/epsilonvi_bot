@@ -9,7 +9,7 @@ import json
 class Command(BaseCommand):
     help = "sets the webhook url"
     # TODO: softcode it!
-    webhook_url = 'https://epsilonvi.ir/bot-webhook-63af1eda-28f9-4f21-b8df-fb73453f9892'
+    webhook_url = 'https://epsilonvi.ir/dev/bot-webhook-63af1eda-28f9-4f21-b8df-fb73453f9892'
     secret_token = os.environ.get('EPSILONVI_DEV_SECRET_TOKEN')
     set_webhook_url = f'https://api.telegram.org/bot{os.environ.get("EPSILONVI_DEV_BOT_TOKEN")}/setWebhook'
     params = {

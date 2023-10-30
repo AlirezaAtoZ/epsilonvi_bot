@@ -240,12 +240,9 @@ class StudentEditInfo(StudentBaseState):
 
     def _handle_callback_query(self):
         http_response = super()._handle_callback_query()
-        _dict = {
-            # "update": self.message_id,
-            "delete": self.sent_message_id,
-        }
-        self.user.userstate.message_ids = json.dumps(_dict)
-        self.user.userstate.save()
+        # self.logger.error(f"{self.sent_message_id=}")
+        self.logger.error(f"{self.message_id=}")
+        self.save_message_ids(delete_ids=[self.message_id])
         return http_response
 
 
