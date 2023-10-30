@@ -177,7 +177,7 @@ class BaseState:
             "photo": "sendPhoto",
         }
         method = TELEGRAM_METHODS[url_type]
-        url = f'https://api.telegram.org/bot{os.environ.get("EPSILONVI_DEV_BOT_TOKEN")}/{method}'
+        url = f'https://api.telegram.org/bot{os.environ.get("EPSILONVI_BOT_TOKEN")}/{method}'
         return url
 
     def _check_response(self, response, data):

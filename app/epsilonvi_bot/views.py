@@ -1,8 +1,11 @@
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseBadRequest
 from django.views.decorators.csrf import csrf_exempt
+
 # from datetime import datetime
 import json
 import os
+import logging
+
 # from bot import models as bot_models
 # from user import models as usr_models
 from .handlers import HandlerManager
@@ -17,10 +20,14 @@ def to_camel_case(string):
 def webhook(request):
     # check the sender is telegram
     if not "X-Telegram-Bot-Api-Secret-Token" in request.headers:
+        logger = logging.getLogger(__name__)
+        logger.error(f"{request.headers=}")
         return HttpResponseForbidden("no secret token was provided.")
-    elif os.environ.get("EPSILONVI_DEV_SECRET_TOKEN") == request.META.get(
-        "EPSILONVI_DEV_SECRET_TOKEN"
+    elif os.environ.get("EPSILONVI_SECRET_TOKEN") != request.META.get(
+        "HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN"
     ):
+        # logger = logging.getLogger(__name__)
+        # logger.error(f"{request.META=}")
         return HttpResponseBadRequest("secrect token not matched.")
     data = json.loads(request.body)
 

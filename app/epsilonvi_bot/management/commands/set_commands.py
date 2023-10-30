@@ -9,15 +9,19 @@ import json
 class Command(BaseCommand):
     help = "sets bot commands"
     # TODO: softcode it!
-    secret_token = os.environ.get('EPSILONVI_DEV_SECRET_TOKEN')
-    set_webhook_url = f'https://api.telegram.org/bot{os.environ.get("EPSILONVI_DEV_BOT_TOKEN")}/setMyCommands'
+    secret_token = os.environ.get('EPSILONVI_SECRET_TOKEN')
+    set_webhook_url = f'https://api.telegram.org/bot{os.environ.get("EPSILONVI_BOT_TOKEN")}/setMyCommands'
 
     def handle(self, *args: Any, **options: Any):
         data = {
             "commands": [
                 {
                     "command": "start",
-                    "description": "starts the bot"
+                    "description": "شروع"
+                },
+                                {
+                    "command": "help",
+                    "description": "راهنما"
                 }
             ]
         }
