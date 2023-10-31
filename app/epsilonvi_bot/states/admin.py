@@ -1244,10 +1244,10 @@ class AdminTeacherPaymentDetail(AdminTeacherPaymentBaseState):
         convs_ids = []
         for c in convs:
             convs_value += c.conversation_value()
-            summary += c.get_telegram_command() + " "
+            summary += c.get_telegram_command(markdown=True) + " "
             convs_ids.append(c.pk)
         text += f"مقدار: {int(convs_value)} تومان\n"
-        text == f"مکالمات: {summary}\n"
+        text += f"مکالمات: {summary}\n"
 
         _list = []
         if confirm:
