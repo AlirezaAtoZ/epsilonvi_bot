@@ -5,11 +5,14 @@ from django.db import models
 from bot import models as bot_models
 from user import models as usr_models
 
+from conversation.models import Conversation
+
 random.random()
 
 
 class Subject(models.Model):
-    name = models.CharField(max_length=64)
+    name = models.CharField(max_length=64, default="")
+    group = models.CharField(max_length=64, default="")
 
     GRADE_CHOICES = [
         ("10", "دهم"),
@@ -46,6 +49,10 @@ class Teacher(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user}"
+    
+    def get_unpaid_conversations(self):
+        convs = Conversation.objects.filter(teacher=self, is_done=True, is_paid=False)
+        return convs
 
 
 class Student(models.Model):

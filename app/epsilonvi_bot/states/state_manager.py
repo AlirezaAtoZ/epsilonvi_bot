@@ -52,6 +52,9 @@ class StateManager(object):
         admin.AdminInfoName.name: admin.AdminInfoName,
         admin.AdminInfoPhoneNumber.name: admin.AdminInfoPhoneNumber,
         admin.AdminInfoCreditCardNumber.name: admin.AdminInfoCreditCardNumber,
+        admin.AdminTeacherPaymentManager.name: admin.AdminTeacherPaymentManager,
+        admin.AdminTeacherPaymentDetail.name: admin.AdminTeacherPaymentDetail,
+        admin.AdminTeacherPaymentHistory.name: admin.AdminTeacherPaymentHistory,
         teacher.TeacherHome.name: teacher.TeacherHome,
         teacher.TeacherInfoManager.name: teacher.TeacherInfoManager,
         teacher.TeacherInfoName.name: teacher.TeacherInfoName,
@@ -89,12 +92,19 @@ class StateManager(object):
             user, is_new = usr_models.User.objects.get_or_create(
                 telegram_id=self.telegram_id
             )
+            # self.logger.error(f"{user=} {is_new=}")
             if is_new:
+                state = bot_models.State.get_state("STDNT_home")
+                self.logger.error(f"{state=}")
+                userstate, _ = bot_models.UserState.objects.get_or_create(user=user)
+                student = eps_models.Student.objects.create(user=user)
+                self.logger.error(f"{userstate=} {is_new=}")
+                self.logger.error(f"{student=}")   
+                userstate.state = state
+                userstate.save()
                 user.name = _from["first_name"]
                 user.save()
-                _ = eps_models.Student.objects.create(user=user)
-                state = bot_models.State.objects.get(name="STDNT_home")
-                _ = bot_models.UserState.objects.create(user=user, state=state)
+
         except ObjectDoesNotExist as err:
             msg = self._get_error_prefix()
             msg += f"DoesNotExist _get_or_create_user\t{_from=}"

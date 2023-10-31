@@ -12,7 +12,7 @@ class PermissionBase:
 
     def has_permission(self, user):
         _p = self._get_admin_permissions(user)
-        if _p and self.name in _p:
+        if _p and (self.name in _p):
             return True
         return False
 
@@ -93,3 +93,11 @@ class IsTeacher(PermissionBase):
         if _p:
             return True
         return False
+
+
+class CanPayTeacher(PermissionBase):
+    name = "can_pay_teacher"
+    text = ""
+
+    def __init__(self) -> None:
+        super().__init__()

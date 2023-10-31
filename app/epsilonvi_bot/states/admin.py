@@ -16,6 +16,7 @@ from bot import models as bot_models
 from bot import utils
 from conversation import models as conv_models
 from conversation.handlers import ConversationStateHandler
+from billing.models import TeacherPayment
 
 
 def get_conversation_list_display(conversatoins_query):
@@ -79,6 +80,7 @@ class AdminBaseState(BaseState):
         perm.AddTeacher.name,
         perm.SendGroupMessage.name,
         perm.AddAdmin.name,
+        perm.CanPayTeacher.name,
     ]
 
     def __init__(self, telegram_response_body, user) -> None:
@@ -175,6 +177,7 @@ class AdminHome(AdminBaseState):
             AdminAdminManager.name: AdminAdminManager,
             AdminQuestionManager.name: AdminQuestionManager,
             AdminTeacherManager.name: AdminTeacherManager,
+            AdminTeacherPaymentManager.name: AdminTeacherPaymentManager,
             AdminInfoManager.name: AdminInfoManager,
         }
 
@@ -185,18 +188,24 @@ class AdminHome(AdminBaseState):
             action_class = v(self._tlg_res, self.user)
             if action_class._has_permission():
                 btn = (action_class.text, action_class.name, "")
+                self.logger.error(f"{btn=}")
                 # self.logger.error(f"{btn=}")
                 _list.append([btn])
         return _list
 
     def get_message(self, chat_id=None):
         notifications = ""
+        self.logger.error(f"here")
         text = f"notification:\n{notifications}\n"
+        self.logger.error(f"here-")
         _list = self._get_admin_actions_btns_list()
+        self.logger.error(f"here--")
         inline_keyboard = self._get_inline_keyboard_list(_list)
+        self.logger.error(f"here---")
         message = self._get_message_dict(
             chat_id=chat_id, text=text, inline_keyboard=inline_keyboard
         )
+        self.logger.error(f"here^")
         return message
 
 
@@ -407,7 +416,7 @@ class AdminAdminList(AdminAdminBaseState):
         return il_list
 
     def get_message(self, chat_id=None):
-        _q = eps_models.Admin.objects.all().exclude(user=self.user)
+        _q = eps_models.Admin.objects.all()
         text = "لیست ادمین ها:\n"
         text += get_admin_list_display(_q)
         inline_keyboard = self.get_admin_list_buttons(_q)
@@ -729,7 +738,7 @@ class AdminQuestionDeny(AdminQuestionBaseState):
             self.logger.error(msg=msg)
         conversation = _q[0]
         _conv_hand = ConversationStateHandler(conversation)
-        _conv_hand.handle() # Q-ADMIN-DRFT -> Q-ADMIN-COMP | A-ADMIN-DRFT -> A-ADMIN-COMP | RQ-ADMIN-DRFT -> RQ-ADMIN-COMP | RA-ADMIN-DRFT -> RA-ADMIN-COMP
+        _conv_hand.handle()  # Q-ADMIN-DRFT -> Q-ADMIN-COMP | A-ADMIN-DRFT -> A-ADMIN-COMP | RQ-ADMIN-DRFT -> RQ-ADMIN-COMP | RA-ADMIN-DRFT -> RA-ADMIN-COMP
         # add new reponse to the conversation responses
         conversation.denied_responses.add(_m)
         # remove convresation working admin
@@ -1151,3 +1160,170 @@ class AdminInfoCreditCardNumber(EditModelMixin, AdminInfoBaseState):
             next_state_cls=AdminInfoManager,
         )
         return http_response
+
+
+# teacher payments
+class AdminTeacherPaymentBaseState(AdminBaseState):
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_input_types = [self.CALLBACK_QUERY]
+        self.expected_states = {
+            AdminHome.name: AdminHome,
+            AdminTeacherPaymentManager.name: AdminTeacherPaymentManager,
+            AdminTeacherPaymentDetail.name: AdminTeacherPaymentDetail,
+            AdminTeacherPaymentHistory.name: AdminTeacherPaymentHistory,
+        }
+        self.permissions += [perm.CanPayTeacher]
+
+
+class AdminTeacherPaymentManager(AdminTeacherPaymentBaseState):
+    name = "ADMIN_teacher_payment_manager"
+    text = "صورت حساب معلم ها"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+
+    def get_message(self, chat_id=None):
+        text = "لیست معلم ها:\n"
+        t_paymnts = conv_models.Conversation.get_teachers_payments_list()
+        _list = []
+        for idx, (tlg_id, amount) in enumerate(t_paymnts.items()):
+            tcher = eps_models.Teacher.objects.filter(user__telegram_id=tlg_id).first()
+            if not tcher:
+                continue
+            _line = f"{idx+1}\. {tcher.user.get_name_inline_link()} {int(amount)}\n"
+            text += _line
+
+            _btn = [
+                f"{idx+1}. {tcher.user.name}",
+                AdminTeacherPaymentDetail.name,
+                {"user": tlg_id},
+            ]
+            _list.append([_btn])
+        history_btn = [
+            AdminTeacherPaymentHistory.text,
+            AdminTeacherPaymentHistory.name,
+            "",
+        ]
+        _list.append([history_btn])
+        inline_btns = self._get_inline_keyboard_list(_list)
+        inline_btns += self._get_default_buttons()
+        message = self._get_message_dict(
+            chat_id=chat_id,
+            text=text,
+            inline_keyboard=inline_btns,
+            parse_mode="MarkdownV2",
+        )
+        return message
+
+    def _handle_callback_query(self, force_transition_type=None, get_message_kwargs={}):
+        if self.callback_query_next_state == AdminTeacherPaymentDetail.name:
+            uid = self.callback_query_data.get("user", None)
+            if uid:
+                teacher = eps_models.Teacher.objects.filter(
+                    user__telegram_id=uid
+                ).first()
+                if teacher:
+                    get_message_kwargs = {"teacher": teacher}
+        return super()._handle_callback_query(force_transition_type, get_message_kwargs)
+
+
+class AdminTeacherPaymentDetail(AdminTeacherPaymentBaseState):
+    name = "ADMIN_teacher_payment_detail"
+    text = "جرییات صورت حساب معلم"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+
+    def get_message(self, teacher, confirm=False, chat_id=None):
+        text = f"نام: {teacher.user.get_name_inline_link()}\n"
+        text += f"شماره کارت: {teacher.credit_card_number}\n"
+        convs = teacher.get_unpaid_conversations()
+        summary = ""
+        convs_value = 0
+        convs_ids = []
+        for c in convs:
+            convs_value += c.conversation_value()
+            summary += c.get_telegram_command() + " "
+            convs_ids.append(c.pk)
+        text += f"مقدار: {int(convs_value)} تومان\n"
+        text == f"مکالمات: {summary}\n"
+
+        _list = []
+        if confirm:
+            btn = [
+                "تایید",
+                AdminTeacherPaymentDetail.name,
+                {"tid": teacher.pk, "action": "pay", "cids": convs_ids},
+            ]
+        else:
+            btn = [
+                "پرداخت شد",
+                AdminTeacherPaymentDetail.name,
+                {"tid": teacher.pk, "action": "confirm"},
+            ]
+        _list.append([btn])
+        inline_btns = self._get_inline_keyboard_list(_list)
+        inline_btns += self._get_default_buttons(AdminTeacherPaymentManager)
+        message = self._get_message_dict(
+            text=text,
+            inline_keyboard=inline_btns,
+            chat_id=chat_id,
+            parse_mode="MarkdownV2",
+        )
+        return message
+
+    def _handle_callback_query(self, force_transition_type=None, get_message_kwargs={}):
+        # if it is paid -> create TeacherPayment entry
+        action = self.callback_query_data.get("action", None)
+        tid = self.callback_query_data.get("tid", None)
+        cids = self.callback_query_data.get("cids", None)
+        # self.logger.error(f"{tid=} {action=}")
+        if self.callback_query_next_state == AdminTeacherPaymentDetail.name:
+            if tid and action == "pay" and cids:
+                teacher = eps_models.Teacher.objects.filter(pk=tid).first()
+                conversations = conv_models.Conversation.objects.filter(
+                    pk__in=cids, teacher=teacher
+                )
+                if teacher and conversations:
+                    convs_value = 0
+                    for c in conversations:
+                        c.is_paid = True
+                        c.save()
+                        convs_value += c.conversation_value()
+                    _ = TeacherPayment.objects.create(
+                        teacher=teacher, amount=convs_value
+                    )
+                    get_message_kwargs = {"teacher": teacher}
+            elif tid and action == "confirm":
+                self.logger.error(f"here")
+                teacher = eps_models.Teacher.objects.filter(pk=tid).first()
+                if teacher:
+                    self.logger.error(f"{teacher=}")
+                    get_message_kwargs = {"teacher": teacher, "confirm": True}
+            elif tid:
+                teacher = eps_models.Teacher.objects.filter(pk=tid).first()
+                if teacher:
+                    get_message_kwargs = {"teacher": teacher}
+
+        return super()._handle_callback_query(force_transition_type, get_message_kwargs)
+
+
+class AdminTeacherPaymentHistory(AdminTeacherPaymentBaseState):
+    name = "ADMIN_teacher_payment_history"
+    text = "تمام پرداخت ها"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+
+    def get_message(self, chat_id=None):
+        text = "لیست پرداخت ها\n"
+        teacher_payments = TeacherPayment.objects.all()
+        for idx, tp in enumerate(teacher_payments):
+            _line = f"{idx+1}- دبیر: {tp.teacher.user.name} تاریخ پرداخت: {tp.date} مقدار پرداخت شده: {tp.amount}\n"
+            text += _line
+        inline_btns = self._get_default_buttons(AdminTeacherPaymentManager)
+        message = self._get_message_dict(
+            chat_id=chat_id, text=text, inline_keyboard=inline_btns
+        )
+        return message

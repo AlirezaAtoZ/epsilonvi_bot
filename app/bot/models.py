@@ -1,4 +1,7 @@
+import logging
 from django.db import models
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.management import call_command
 from user import models as usr_models
 
 
@@ -81,6 +84,7 @@ class Message(models.Model):
             message.update(_d)
         return message
 
+
 class StateMessage(models.Model):
     text = None
 
@@ -104,13 +108,23 @@ class State(models.Model):
     def __str__(self) -> str:
         return f"{self.role} {self.name}"
 
+    @classmethod
+    def get_state(cls, state_name):
+        logger = logging.getLogger(__name__)
+        for _ in range(2):
+            try:
+                logger.error(f"{state_name}")
+                state = cls.objects.get(name=state_name)
+            except ObjectDoesNotExist as e:
+                logger.error(f"{call_command('insert_states')}")
+                state = None
+        return state
+
 
 class UserState(models.Model):
     user = models.OneToOneField(usr_models.User, on_delete=models.CASCADE)
     # default_state = State.objects.get(name="UNIDF_welcome")
-    state = models.ForeignKey(
-        State, on_delete=models.SET_NULL, null=True
-    )
+    state = models.ForeignKey(State, on_delete=models.SET_NULL, null=True)
 
     ROLES = [
         ("UNIDF", "unidentified"),
