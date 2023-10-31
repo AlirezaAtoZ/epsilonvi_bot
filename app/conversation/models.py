@@ -191,7 +191,9 @@ class Conversation(models.Model):
     def __str__(self) -> str:
         return f"{self.student}"
 
-    def get_telegram_command(self):
+    def get_telegram_command(self, markdown=False):
+        if markdown:
+            return f"/conv\_{self.pk}"
         return f"/conv_{self.pk}"
 
     def set_next_state(self):
