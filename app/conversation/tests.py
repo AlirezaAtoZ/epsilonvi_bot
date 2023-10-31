@@ -34,3 +34,10 @@ class ConversationHanderTestCase(TestCase):
             subject=self.subject,
         )
         self.assertEqual(conversation.student, self.student)
+
+class ConversationTestCase(TestCase):
+    def setUp(self) -> None:
+        return super().setUp()
+    
+    def test_get_teacher_payments(self):
+        Conversation.get_teachers_payments_list()

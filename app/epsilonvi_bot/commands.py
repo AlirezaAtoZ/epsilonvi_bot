@@ -28,15 +28,12 @@ class CommandBase(BaseState):
 
         if self.user.userstate.role == "ADMIN":
             _state = AdminHome
-            _name = "ADMIN_home"
         elif self.user.userstate.role == "TCHER":
             _state = TeacherHome
-            _name = "TCHER_home"
         else:
             _state = StudentHome
-            _name = "STDNT_home"
 
-        self.user.userstate.state = bot_models.State.objects.get(name=_name)
+        self.user.userstate.state = bot_models.State.get_state(_state.name)
         self.user.userstate.save()
         state = _state(self._tlg_res, self.user)
         message = state.get_message()
@@ -50,7 +47,7 @@ class Home(CommandBase):
 
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
-        self.expected_actions = ["hello_world", "admin"]
+        self.expected_actions = ["hello_world", "admin", "teacher"]
 
     def _is_get_deeplink(self, text):
         p = re.compile(r"/start action_([\w]+)_([\w]+)")
@@ -149,7 +146,7 @@ class Home(CommandBase):
         return HTTPResponse("nok")
 
     def handle(self, action_value=None):
-        self.logger.error(f"{self.input_text=}")
+        # self.logger.error(f"{self.input_text=}")
         _is_deeplink, action, value = self._is_get_deeplink(self.input_text)
         if _is_deeplink:
             method = getattr(self, action, None)
@@ -168,11 +165,7 @@ class Help(CommandBase):
 
     def handle(self, action_value=None):
         _p = [
-            "is_admin",
-            "send_group_message",
-            "add_admin",
-            perm.CanApproveConversation.name,
-            perm.AddTeacher.name,
+            perm.IsAdmin,
         ]
         permissoins = json.dumps(_p)
         admin = eps_models.Admin.objects.get(

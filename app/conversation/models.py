@@ -1,11 +1,11 @@
 from datetime import datetime
+import operator
 from pyexpat import model
 
 from django.db import models
 
 from user import models as usr_models
 from bot import models as bot_models
-from epsilonvi_bot import models as eps_models
 
 
 class Package(models.Model):
@@ -37,33 +37,12 @@ class Package(models.Model):
     ]
     field = models.CharField(max_length=3, choices=FIELD_CHOICES, default="GEN")
 
-    subjects = models.ManyToManyField(eps_models.Subject)
+    subjects = models.ManyToManyField("epsilonvi_bot.Subject")
     price = models.BigIntegerField(blank=True, null=True)
     is_active = models.BooleanField(default=False)
 
-    def __str_single__(self):
-        text = str(self.number_of_questions)
-        text += " سوال "
-        text += f"از درس {self.subjects.all()[0]}"
-        return text
-
-    def __str_all__(self):
-        text = str(self.number_of_questions)
-        text += " سوال "
-        if self.field == "GEN":
-            text += "دروس عمومی"
-        elif self.field == "SPC":
-            text += "دروس تخصصی"
-        else:
-            text += "از دروس تخصصی رشته "
-            text += self.get_field_display()
-        return text
-
     def __str__(self) -> str:
-        if self.package_type == "ALL":
-            return self.__str_all__()
-        else:
-            return self.__str_single__()
+        return self.name
 
     def display_detailed(self):
         text = f"{self.name}\n"
@@ -76,7 +55,7 @@ class Package(models.Model):
 
 
 class StudentPackage(models.Model):
-    student = models.ForeignKey(eps_models.Student, on_delete=models.CASCADE)
+    student = models.ForeignKey("epsilonvi_bot.Student", on_delete=models.CASCADE)
     package = models.ForeignKey(
         "Package", on_delete=models.CASCADE, related_name="studentpackage"
     )
@@ -102,15 +81,15 @@ class StudentPackage(models.Model):
 
 class Conversation(models.Model):
     student_package = models.ForeignKey("StudentPackage", on_delete=models.CASCADE)
-    subject = models.ForeignKey(eps_models.Subject, on_delete=models.CASCADE)
+    subject = models.ForeignKey("epsilonvi_bot.Subject", on_delete=models.CASCADE)
 
-    student = models.ForeignKey(eps_models.Student, on_delete=models.CASCADE)
+    student = models.ForeignKey("epsilonvi_bot.Student", on_delete=models.CASCADE)
     teacher = models.ForeignKey(
-        eps_models.Teacher, on_delete=models.CASCADE, blank=True, null=True
+        "epsilonvi_bot.Teacher", on_delete=models.CASCADE, blank=True, null=True
     )
 
     admins = models.ManyToManyField(
-        eps_models.Admin, related_name="all_ineracted_admins"
+        "epsilonvi_bot.Admin", related_name="all_ineracted_admins"
     )
     denied_responses = models.ManyToManyField(
         bot_models.Message, related_name="denied_responses"
@@ -119,7 +98,7 @@ class Conversation(models.Model):
     question = models.ManyToManyField(bot_models.Message, related_name="question")
     question_date = models.DateTimeField(auto_now_add=True)
     question_approved_by = models.ForeignKey(
-        eps_models.Admin,
+        "epsilonvi_bot.Admin",
         on_delete=models.CASCADE,
         related_name="question_approved_by_admin",
         blank=True,
@@ -129,7 +108,7 @@ class Conversation(models.Model):
     answer = models.ManyToManyField(bot_models.Message, related_name="answer")
     answer_date = models.DateTimeField(null=True, blank=True)
     answer_approved_by = models.ForeignKey(
-        eps_models.Admin,
+        "epsilonvi_bot.Admin",
         on_delete=models.CASCADE,
         related_name="answer_approved_by_admin",
         blank=True,
@@ -139,7 +118,7 @@ class Conversation(models.Model):
     re_question = models.ManyToManyField(bot_models.Message, related_name="re_question")
     re_question_date = models.DateTimeField(auto_now_add=True)
     re_question_approved_by = models.ForeignKey(
-        eps_models.Admin,
+        "epsilonvi_bot.Admin",
         on_delete=models.CASCADE,
         related_name="re_question_approved_by_admin",
         blank=True,
@@ -149,7 +128,7 @@ class Conversation(models.Model):
     re_answer = models.ManyToManyField(bot_models.Message, related_name="re_answer")
     re_answer_date = models.DateTimeField(null=True, blank=True)
     re_answer_approved_by = models.ForeignKey(
-        eps_models.Admin,
+        "epsilonvi_bot.Admin",
         on_delete=models.CASCADE,
         related_name="re_answer_approved_by_admin",
         blank=True,
@@ -157,7 +136,7 @@ class Conversation(models.Model):
     )
 
     working_admin = models.ForeignKey(
-        eps_models.Admin,
+        "epsilonvi_bot.Admin",
         on_delete=models.CASCADE,
         related_name="wroking_admin",
         blank=True,
@@ -166,6 +145,7 @@ class Conversation(models.Model):
 
     rate = models.FloatField(null=True, blank=True)
     is_done = models.BooleanField(default=False)
+    is_paid = models.BooleanField(default=False)
 
     student_denied = models.BooleanField(default=False)
     teacher_denied = models.BooleanField(default=False)
@@ -236,3 +216,31 @@ class Conversation(models.Model):
         if idx > 1:
             self.conversation_state = self.CONVERSATION_STATES[idx - 1][0]
             # self.save()
+
+    def conversation_value(self):
+        value = (
+            self.student_package.package.price
+            / self.student_package.package.number_of_questions
+        ) * 0.7  # TODO more dynamic way?
+        return value
+
+    @classmethod
+    def get_teachers_payments_list(cls):
+        done_conversations = cls.objects.filter(is_done=True, is_paid=False)
+        unpaid_dict = {}
+        for conv in done_conversations:
+            conv_value = (
+                conv.student_package.package.price
+                / conv.student_package.package.number_of_questions
+            )
+            conv_value *= 0.7
+            telegram_id = conv.teacher.user.telegram_id
+            _cur_val = unpaid_dict.get(telegram_id, None)
+            _total = _cur_val + conv_value if _cur_val else conv_value
+            _d = {str(telegram_id): _total}
+            unpaid_dict.update(_d)
+
+        unpaid_dict_sorted = dict(
+            sorted(unpaid_dict.items(), key=operator.itemgetter(1))
+        )
+        return unpaid_dict_sorted
