@@ -18,8 +18,11 @@ import os
 from django.contrib import admin
 from django.urls import path
 from epsilonvi_bot import views as eps_views
+from billing.views import ZarinpalRequestCBV, ZarinpalVerifyCBV
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path(f'{os.environ.get("WEBHOOK_PATH")}', eps_views.webhook, name='bot-webhook'),
+    path("invoice/<int:pk>/request/", ZarinpalRequestCBV.as_view(), name="zarinpal-request"),
+    path("invoice/<int:pk>/verify/", ZarinpalVerifyCBV.as_view(), name="zarinpal-verify"),
 ]

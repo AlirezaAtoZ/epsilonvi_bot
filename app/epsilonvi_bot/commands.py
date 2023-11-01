@@ -16,6 +16,7 @@ from epsilonvi_bot import models as eps_models
 from epsilonvi_bot import permissions as perm
 from conversation import models as conv_models
 from bot import models as bot_models
+from billing import models as bil_models
 
 
 class CommandBase(BaseState):
@@ -144,6 +145,23 @@ class Home(CommandBase):
         if check:
             return HttpResponse("ok")
         return HTTPResponse("nok")
+
+    def verify(self, code):
+        if code == 0:
+            # when invoice has not found
+            pass
+        else:
+            invoice = bil_models.Invoice.objects.filter(
+                student_package__student=self.user.student, pk=code
+            ).first()
+            if invoice:
+                succ = invoice.status in [100, 101]
+                if succ:
+                    text = f"بسته: {invoice.student_package.package.name} با موفقیت خریداری و به لیست بسته های شما اضافه شد."
+                else:
+                    text = f"در خرید بسته: {invoice.student_package.package.name} مشکلی پیش آمد. {invoice.get_status_display()}"
+                message = self._get_message_dict(text=text)
+                self.send_text(message)
 
     def handle(self, action_value=None):
         # self.logger.error(f"{self.input_text=}")
