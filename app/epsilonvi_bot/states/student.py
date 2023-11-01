@@ -2,6 +2,7 @@ import copy
 import json
 
 from django.http import HttpResponse
+from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 
 from .base import BaseState, MessageTypeMixin, ConversationDetailMixin
@@ -9,6 +10,7 @@ from conversation import models as conv_models
 from conversation import handlers
 from bot import models as bot_models
 from epsilonvi_bot import models as eps_models
+from billing import models as bil_models
 
 # TODO remove double queries
 # TODO phone number validation error
@@ -35,26 +37,27 @@ def print_student_active_packages(user):
         student__user=user,
         is_done=False,
         is_pending=False,
+        is_paid=True,
     )
     text = ""
     if user_packages.count() == 0:
         text = "شما بسته فعالی ندارید."
     for idx, pckg in enumerate(user_packages):
-        t = f"{idx}- {pckg.asked_questions}/{pckg.package.__str__()}\n"
+        t = f"{idx+1}- {pckg.asked_questions}/{pckg.package.__str__()}\n"
         text += t
     return text
 
 
 def print_student_all_packages_detailed(user):
-    pckgs = conv_models.StudentPackage.objects.filter(student__user=user).order_by(
-        "purchased_date"
-    )
+    pckgs = conv_models.StudentPackage.objects.filter(
+        student__user=user, is_paid=True
+    ).order_by("purchased_date")
     text = ""
     if pckgs.count() == 0:
         text = "تا کنون بسته ای خریداری نشده.\n"
     else:
         for idx, pckg in enumerate(pckgs):
-            t = f"{idx}- {pckg} {pckg.purchased_date}\n"
+            t = f"{idx+1}- {pckg} {pckg.purchased_date}\n"
             text += t
     return text
 
@@ -159,7 +162,9 @@ class StudentHome(BaseState):
     def get_message(self, chat_id=None):
         text = f"{print_user_name(self.user)}\n"
         text += f"{print_student_unseen_conversations(self.user)}\n"
-        text += f"{print_student_active_packages(self.user)}"
+        text += "بسته های فعال شما:\n"
+        sp = conv_models.StudentPackage.get_active_package(student=self.user.student)
+        text += conv_models.StudentPackage.display_short_list(sp)
 
         _list = [
             [(StudentQuestionManager.text, StudentQuestionManager.name, "")],
@@ -373,29 +378,24 @@ class StudentPackageBaseState(StudentBaseState):
             StudentPackageManager.name: StudentPackageManager,
             StudentPackageConfirm.name: StudentPackageConfirm,
             StudentPackageAdd.name: StudentPackageAdd,
+            StudentPackageInvoice.name: StudentPackageInvoice,
         }
         self.expected_input_types = [self.CALLBACK_QUERY]
 
 
-class StudentPackageManager(StudentBaseState):
+class StudentPackageManager(StudentPackageBaseState):
     name = "STDNT_package_manager"
     text = "مدیریت بسته"
 
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
-        self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_states = {
-            StudentPackageAdd.name: StudentPackageAdd,
-            StudentPackageAdd.name: StudentPackageAdd,
-            StudentPackageHistory.name: StudentPackageHistory,
-            StudentHome.name: StudentHome,
-        }
 
     def get_message(self, chat_id=None):
         text = print_student_active_packages(self.user)
         _list = [
             [(StudentPackageAdd.text, StudentPackageAdd.name, "")],
             [(StudentPackageHistory.text, StudentPackageHistory.name, "")],
+            [(StudentPackageInvoice.text, StudentPackageInvoice.name, "")],
             [(self.BACK_BTN_TEXT, StudentHome.name, "")],
         ]
         inline_keyboard = self._get_inline_keyboard_list(_list)
@@ -537,12 +537,29 @@ class StudentPackageConfirm(StudentPackageBaseState):
     def get_message(self, package, chat_id=None):
         text = "خرید پکیج:\n"
         text += f"{package.display_detailed()}"
-        pid = package.pk
+        conv_models.StudentPackage.objects.filter(
+            student=self.user.student, is_pending=False, is_paid=False
+        ).delete()
+        sp = conv_models.StudentPackage.objects.create(
+            student=self.user.student,
+            package=package,
+        )
+        bil_models.Invoice.objects.filter(
+            student_package__student=self.user.student, is_paid=False, is_pending=False
+        ).delete()
+        inv = bil_models.Invoice.objects.create(
+            student_package=sp,
+            amount=package.price,
+        )
+        if settings.IS_DEV:
+            url = f"https://epsilonvi.ir/dev/invoice/{inv.pk}/request/"
+        else:
+            url = f"https://epsilonvi.ir/dev/invoice/{inv.pk}/request/"
         inline_keyboard = [
             [
                 {
                     "text": "انتقال به درگاه پرداخت",
-                    "url": f"https://t.me/epsilonvibot?start=action_buy_{pid}",
+                    "url": url,
                 }
             ],
         ]
@@ -553,17 +570,12 @@ class StudentPackageConfirm(StudentPackageBaseState):
         return message
 
 
-class StudentPackageHistory(StudentBaseState):
+class StudentPackageHistory(StudentPackageBaseState):
     name = "STDNT_package_history"
     text = "تاریخچه بسته ها"
 
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
-        self.expected_input_types.append(self.CALLBACK_QUERY)
-        self.expected_states = {
-            "STDNT_package_manager": StudentPackageManager,
-            "STDNT_home": StudentHome,
-        }
 
     def get_message(self, chat_id=None):
         text = f"{self.text}:\n"
@@ -573,6 +585,42 @@ class StudentPackageHistory(StudentBaseState):
             text=text, inline_keyboard=inline_keyboard, chat_id=chat_id
         )
         return message
+
+
+class StudentPackageInvoice(StudentPackageBaseState):
+    name = "STDNT_package_invoice"
+    text = "صورت حساب ها"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+
+    def get_message(self, all=False, chat_id=None):
+        text = "لیست پرداخت ها:\n"
+
+        if all:
+            all_char = "✅"
+            invs = bil_models.Invoice.get_all(
+                student_package__student=self.user.student
+            )
+        else:
+            all_char = ""
+            invs = bil_models.Invoice.get_successful(
+                student_package__student=self.user.student
+            )
+        text += bil_models.Invoice.display_list(invs)
+        btn = [f"{all_char} همه", StudentPackageInvoice.name, {"all": not all}]
+        _list = [[btn]]
+        inline_btns = self._get_inline_keyboard_list(_list)
+        inline_btns += self._get_home_and_back_inline_button(StudentPackageManager)
+        message = self._get_message_dict(text=text, inline_keyboard=inline_btns)
+        return message
+
+    def _handle_callback_query(self, force_transition_type=None, get_message_kwargs={}):
+        if self.callback_query_next_state == StudentPackageInvoice.name:
+            all = self.callback_query_data.get("all", None)
+            if all:
+                get_message_kwargs = {"all": True}
+        return super()._handle_callback_query(force_transition_type, get_message_kwargs)
 
 
 # question manager
@@ -633,10 +681,7 @@ class StudentQuestionAdd(StudentQuestionBaseState):
         text = "درس مورد نظر خود را انتخاب کنید.\n"
         _list = []
         # active packages
-        _q = conv_models.StudentPackage.objects.filter(
-            student=self.user.student,
-            is_done=False,
-        )
+        _q = conv_models.StudentPackage.get_active_package(student=self.user.student)
         for sp in _q:
             char_sel = "⏹️"
             if student_package == sp:

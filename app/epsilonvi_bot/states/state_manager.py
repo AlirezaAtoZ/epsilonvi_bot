@@ -19,6 +19,7 @@ class StateManager(object):
         "STDNT_question_manager": student.StudentQuestionManager,
         student.StudentPackageAdd.name: student.StudentPackageAdd,
         student.StudentPackageConfirm.name: student.StudentPackageConfirm,
+        student.StudentPackageInvoice.name: student.StudentPackageInvoice,
         "STDNT_new_question_choose": student.StudentNewQuestionChoose,
         "STDNT_new_question_confirm": student.StudentNewQuestionChoose,
         student.StudentQuestionAdd.name: student.StudentQuestionAdd,

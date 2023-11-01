@@ -64,7 +64,8 @@ class StudentPackage(models.Model):
     paid_price = models.BigIntegerField(default=0)
 
     is_done = models.BooleanField(default=False)
-    is_pending = models.BooleanField(default=True)
+    is_pending = models.BooleanField(default=False)
+    is_paid = models.BooleanField(default=False)
 
     purchased_date = models.DateTimeField(auto_now_add=True)
 
@@ -72,11 +73,31 @@ class StudentPackage(models.Model):
         return f"{self.package} {self.student.user} {self.asked_questions} of {self.package.number_of_questions}"
 
     def increase_asked(self):
-        if self.asked_questions < self.package.number_of_questions:
+        if self.asked_questions + 1 < self.package.number_of_questions:
             self.asked_questions += 1
+            return True
+        elif self.asked_questions + 1 == self.package.number_of_questions:
+            self.asked_questions += 1
+            self.is_done = True
             return True
         else:
             return False
+
+    @classmethod
+    def get_active_package(cls, *args, **kwargs):
+        pcks = cls.objects.filter(is_paid=True, is_done=False, **kwargs)
+        return pcks
+
+    def display_short(self):
+        text = f"{self.package.name} {self.asked_questions} از {self.package.number_of_questions}"
+        return text
+
+    @staticmethod
+    def display_short_list(query):
+        text = ""
+        for idx, sp in enumerate(query):
+            text += f"{idx+1}- {sp.display_short()}\n"
+        return text
 
 
 class Conversation(models.Model):
