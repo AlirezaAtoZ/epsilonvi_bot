@@ -373,7 +373,8 @@ class BaseState:
     def handle(self):
         if not self.data_type in self.expected_input_types:
             text = "انجام این عملیات امکان پذیر نیست."
-            data = self._get_message_dict(chat_id=self.chat_id, text=text)
+            reply_markup = {"remove_keyboard": True}
+            data = self._get_message_dict(chat_id=self.chat_id, text=text, reply_markup=reply_markup)
             self.send_text(data)
             return HttpResponse("Something went wrong")
         method = getattr(self, f"_handle_{self.data_type}")
