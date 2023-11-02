@@ -150,7 +150,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Telegram Tokens
-IS_DEV = bool(strtobool(os.environ.get("DEVELOPE")))
+IS_DEV = bool(strtobool(os.environ.get("DEVELOPE"))) # type: ignore
 TELEGRAM_BOT_TOKEN = (
     os.environ.get("EPSILONVI_BOT_TOKEN")
     if not IS_DEV
@@ -163,5 +163,5 @@ TELEGRAM_SECRET_CODE = (
 )
 BOT_USERNAME = os.environ.get("BOT_USERNAME")
 
-ZP_SANDBOX = bool(strtobool(os.environ.get("ZARINPAL_SANDBOX")))
+ZP_SANDBOX = bool(strtobool(os.environ.get("ZARINPAL_SANDBOX"))) # type: ignore
 ZP_MERCHANT_ID = os.environ.get("ZARINPAL_MERCHANT_ID")

@@ -554,7 +554,7 @@ class StudentPackageConfirm(StudentPackageBaseState):
         if settings.IS_DEV:
             url = f"https://epsilonvi.ir/dev/invoice/{inv.pk}/request/"
         else:
-            url = f"https://epsilonvi.ir/dev/invoice/{inv.pk}/request/"
+            url = f"https://epsilonvi.ir/invoice/{inv.pk}/request/"
         inline_keyboard = [
             [
                 {

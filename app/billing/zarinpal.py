@@ -7,7 +7,7 @@ from .models import Invoice
 
 
 class Zarinpal(object):
-    def __init__(self, invoice: Invoice = None) -> None:
+    def __init__(self, invoice: Invoice) -> None:
         self.invoice = invoice
         if settings.ZP_SANDBOX:
             sandbox = "sandbox"
@@ -40,16 +40,16 @@ class Zarinpal(object):
         if response.status_code == 200:
             res = response.json()
             self.invoice.authority = str(res["Authority"])
-            pay_url = self.start_pay_url + str(int(self.invoice.authority))
+            pay_url = self.start_pay_url + self.invoice.authority
             self.invoice.payment_url = pay_url
             self.invoice.is_pending = True
             self.invoice.save()
-            self.invoice.student_package.is_pending=True
-            self.invoice.student_package.save()
+            self.invoice.student_package.is_pending = True  # type: ignore
+            self.invoice.student_package.save()  # type: ignore
 
         else:
             pass
-        return pay_url
+        return pay_url  # type: ignore
 
     def get_telegram_url(self):
         logger = logging.getLogger(__name__)
@@ -76,13 +76,13 @@ class Zarinpal(object):
                 self.invoice.paid_date = timezone.now()
                 self.invoice.is_pending = False
                 self.invoice.save()
-                self.invoice.student_package.is_paid = True
-                self.invoice.student_package.is_pending = False
-                self.invoice.student_package.save()
+                self.invoice.student_package.is_paid = True  # type: ignore
+                self.invoice.student_package.is_pending = False  # type: ignore
+                self.invoice.student_package.save()  # type: ignore
             else:
                 self.invoice.status = res["Status"]
                 self.invoice.is_pending = False
-                self.invoice.save()   
-                self.invoice.student_package.is_pending = False
-                self.invoice.student_package.save()             
+                self.invoice.save()
+                self.invoice.student_package.is_pending = False  # type: ignore
+                self.invoice.student_package.save()  # type: ignore
         return self.invoice.get_verify_telegram_url()
