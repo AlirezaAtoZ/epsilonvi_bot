@@ -900,7 +900,7 @@ class StudentQuestionCompose(MessageTypeMixin, StudentQuestionBaseState):
         else:
             pass
         _conv_hand = handlers.ConversationStateHandler(conversation)
-        _conv_hand.handle()  # Q-STDNT-DRFT -> Q-STDNT-COMP
+        _conv_hand._handle_q_stdnt_dend()  # Q-STDNT-DEND -> Q-STDNT-DRFT
 
         data = self._get_message_dict(chat_id=self.chat_id, message_id=self.message_id)
         self.delete_message(data)
@@ -957,7 +957,7 @@ class StudentQuestionConfirm(StudentQuestionBaseState):
                 return super()._handle_callback_query()
             else:
                 _h = handlers.ConversationStateHandler(conversation)
-                _h.handle()
+                _h._handle_q_stdnt_drft()
 
                 return super()._handle_callback_query()
 
@@ -1021,7 +1021,7 @@ class StudentQuestionDetail(ConversationDetailMixin, StudentQuestionBaseState):
                 chat_id=chat_id, text=text, inline_keyboard=inline_btns
             )
             # add denied message to the conversations messages
-            messages.append({"message_type": "text", "message": message})
+            # messages.append({"message_type": "text", "message": message})
         # elif conversation is answerded and student can deny the teacher answer
         # add the "Understand" and "objection" btn to the last message
         elif _conv_hand.is_waiting_on_student():
@@ -1061,15 +1061,16 @@ class StudentQuestionDetail(ConversationDetailMixin, StudentQuestionBaseState):
                     student=self.user.student,
                     conversation_state=self.CONVERSATION_STATE_DRAFT,
                 ).delete()
-                _conv_handle.handle()  # Q-ADMIN-COMP -> Q-STDNT-DEND
-                _conv_handle.handle()  # Q-ADMIN-DEND -> Q-STDNT-DRFT
+                _conv_handle._handle_q_stdnt_dend()  # Q-STDNT-DEND -> Q-STDNT-DRFT
             elif (
                 conversation
                 and action == "deny"
                 and self.callback_query_next_state == StudentQuestionDeny.name
             ):
                 _conv_handle = handlers.ConversationStateHandler(conversation)
-                _conv_handle.handle("deny")  # A-ADMIN-APPR -> A-STDNT-DENY
+                _conv_handle._handle_a_admin_appr(
+                    "deny"
+                )  # A-ADMIN-APPR -> A-STDNT-DENY
                 _conv_handle.handle()  # A-STDNT-DENY -> RQ-STDNT-DRFT
                 get_message_kwargs = {"conversation": conversation}
             elif (
@@ -1117,10 +1118,10 @@ class StudentQuestionDeny(MessageTypeMixin, StudentQuestionBaseState):
                 conversation = conv_models.Conversation.objects.get(
                     student=user.student, conversation_state="RQ-STDNT-DRFT"
                 )
+                conversation.re_question.all().delete()
         except ObjectDoesNotExist as err:
             return None
         else:
-            conversation.re_question.all().delete()
             conversation.re_question.add(message_model)
             conversation.save()
             return conversation
@@ -1244,7 +1245,7 @@ class StudentQuestionDenyConfirm(StudentQuestionBaseState):
             action = self.callback_query_data.get("action", None)
             if conversation and not action:
                 _conv_hand = handlers.ConversationStateHandler(conversation)
-                _conv_hand.handle()  # RQ-STDNT-DRFT -> RQ-STDNT-COMP
+                _conv_hand._handle_rq_stdnt_drft()  # RQ-STDNT-DRFT -> RQ-STDNT-COMP
             elif conversation and action == "approve":
                 _conv_hand = handlers.ConversationStateHandler(conversation)
                 _conv_hand._handle_a_stdnt_appr()  # C-CNVR-DONE

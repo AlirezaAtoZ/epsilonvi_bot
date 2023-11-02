@@ -69,7 +69,6 @@ class MessageMixin:
             text=text,
             inline_keyboard=inline_keyboard,
         )
-        # self.logger.error(f"{message=}")
         return message
 
 
@@ -134,11 +133,8 @@ class AdminBaseState(BaseState):
         return btns
 
     def _handle_delete_messages(self):
-        # self.logger.error(f"{self.get_message_ids()=}")
         message_ids = self.get_message_ids("delete")
-        # self.logger.error(f"{message_ids=}")
         for m_id in message_ids:
-            # self.logger.error(f"{m_id=}")
             data = self._get_message_dict(chat_id=self.chat_id, message_id=m_id)
             self.delete_message(data)
         return True
@@ -150,17 +146,11 @@ class AdminBaseState(BaseState):
         return HttpResponse()
 
     def handle(self):
-        # self.logger.error(f"here")
         if not self._has_permission():
             msg = self._get_error_prefix()
             msg += f"unauthorized request: {self.user}"
             self.logger.error(msg=msg)
             return self.message_unauthorized(self.chat_id)
-        # if not self.data_type in self.expected_input_types:
-        #     return self.message_unexpected_input(self.chat_id)
-        # # self.logger.error(f"XXX{self.data_type=}")
-        # method = getattr(self, f"_handle_{self.data_type}", self._handle_unknown)
-        # # self.logger.error(f"XXX{method=}")
         return super().handle()
 
 
@@ -183,29 +173,21 @@ class AdminHome(AdminBaseState):
 
     def _get_admin_actions_btns_list(self):
         _list = []
-        # self.logger.error(self._get_error_prefix())
         for _, v in self.expected_states.items():
             action_class = v(self._tlg_res, self.user)
             if action_class._has_permission():
                 btn = (action_class.text, action_class.name, "")
-                self.logger.error(f"{btn=}")
-                # self.logger.error(f"{btn=}")
                 _list.append([btn])
         return _list
 
     def get_message(self, chat_id=None):
         notifications = ""
-        self.logger.error(f"here")
         text = f"notification:\n{notifications}\n"
-        self.logger.error(f"here-")
         _list = self._get_admin_actions_btns_list()
-        self.logger.error(f"here--")
         inline_keyboard = self._get_inline_keyboard_list(_list)
-        self.logger.error(f"here---")
         message = self._get_message_dict(
             chat_id=chat_id, text=text, inline_keyboard=inline_keyboard
         )
-        self.logger.error(f"here^")
         return message
 
 
@@ -379,7 +361,6 @@ class AdminAdminManager(AdminAdminBaseState):
         super().__init__(telegram_response_body, user)
 
     def get_message(self, chat_id=None):
-        # self.logger.error(self._get_error_prefix())
         text = self.text
         _list = [
             [(AdminAdminAdd.text, AdminAdminAdd.name, "")],
@@ -392,7 +373,6 @@ class AdminAdminManager(AdminAdminBaseState):
             text=text,
             inline_keyboard=inline_keyboard,
         )
-        # self.logger.error(f"{message=}")
         return message
 
 
@@ -689,6 +669,9 @@ class AdminQuestionDetail(ConversationDetailMixin, AdminQuestionBaseState):
                 # delete last messages
                 self._handle_delete_messages()
                 # continiue
+                return super()._handle_callback_query(
+                    force_transition_type=self.TRANSITION_DEL_SEND
+                )
 
             elif _action == "deny" and _conv_hand.is_waiting_on_admin():
                 _conv_hand.handle(
@@ -699,7 +682,9 @@ class AdminQuestionDetail(ConversationDetailMixin, AdminQuestionBaseState):
                 conversation.admins.add(self.user.admin)
                 conversation.working_admin = self.user.admin
                 conversation.save()
-                return super()._handle_callback_query()
+                return super()._handle_callback_query(
+                    force_transition_type=self.TRANSITION_DEL_SEND
+                )
 
             else:
                 return self.message_error()
@@ -736,9 +721,10 @@ class AdminQuestionDeny(AdminQuestionBaseState):
             msg = self._get_error_prefix()
             msg += f"admin got more than one working converstation {self.user}"
             self.logger.error(msg=msg)
-        conversation = _q[0]
+        conversation = _q.last()
         _conv_hand = ConversationStateHandler(conversation)
         _conv_hand.handle()  # Q-ADMIN-DRFT -> Q-ADMIN-COMP | A-ADMIN-DRFT -> A-ADMIN-COMP | RQ-ADMIN-DRFT -> RQ-ADMIN-COMP | RA-ADMIN-DRFT -> RA-ADMIN-COMP
+        _conv_hand.handle()  # Q-ADMIN_COMP -> Q-STDNT-DEND | A-ADMIN-COMP -> A-TCHER-DEND | RQ-ADMIN-COMP -> RQ-STDNT-DEND | RA-ADMIN-COMP -> RA-ADMIN-DEND
         # add new reponse to the conversation responses
         conversation.denied_responses.add(_m)
         # remove convresation working admin
@@ -839,7 +825,6 @@ class AdminTeacherList(AdminTeacherBaseState):
         return message
 
     def _handle_callback_query(self, force_transition_type=None, get_message_kwargs={}):
-        self.logger.error(f"{self.callback_query_data=}")
         teacher_pk = self.callback_query_data.get("teacher", None)
         if teacher_pk:
             _q = eps_models.Teacher.objects.filter(pk=teacher_pk)
@@ -1278,7 +1263,6 @@ class AdminTeacherPaymentDetail(AdminTeacherPaymentBaseState):
         action = self.callback_query_data.get("action", None)
         tid = self.callback_query_data.get("tid", None)
         cids = self.callback_query_data.get("cids", None)
-        # self.logger.error(f"{tid=} {action=}")
         if self.callback_query_next_state == AdminTeacherPaymentDetail.name:
             if tid and action == "pay" and cids:
                 teacher = eps_models.Teacher.objects.filter(pk=tid).first()
@@ -1296,10 +1280,8 @@ class AdminTeacherPaymentDetail(AdminTeacherPaymentBaseState):
                     )
                     get_message_kwargs = {"teacher": teacher}
             elif tid and action == "confirm":
-                self.logger.error(f"here")
                 teacher = eps_models.Teacher.objects.filter(pk=tid).first()
                 if teacher:
-                    self.logger.error(f"{teacher=}")
                     get_message_kwargs = {"teacher": teacher, "confirm": True}
             elif tid:
                 teacher = eps_models.Teacher.objects.filter(pk=tid).first()

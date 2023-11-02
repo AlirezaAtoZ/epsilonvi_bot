@@ -389,7 +389,7 @@ class ConversationStateHandler:
             return False
 
     def is_waiting_on_teacher(self):
-        _true_states = ["Q-ADMIN-APPR", "RQ-ADMIN-APPR"]
+        _true_states = ["Q-ADMIN-APPR", "RQ-ADMIN-APPR", "A-TCHER-DEND", "RA-TCHER-DEND"]
         if self._conv.conversation_state in _true_states:
             return True
         else:

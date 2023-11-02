@@ -311,7 +311,7 @@ class TeacherQuestionSelect(TeacherQuestionBaseState):
         _list = []
         help_dict = {
             "MTH": "ریاضی",
-            "BIO": "زیست",
+            "BIO": "تجربی",
             "ECO": "انسانی",
             "GEN": "عمومی",
         }
@@ -402,17 +402,47 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
 
-    def get_message(self, conversation, confirm=False, chat_id=None):
+    def get_message(
+        self, conversation: conv_models.Conversation, confirm=False, chat_id=None
+    ):
         _list = []
         _ch = ConversationStateHandler(conversation)
-        if _ch.is_waiting_on_teacher():
-            if conversation.teacher == self.user.teacher:
+        text = "عملیات ها:\n"
+        if _ch.is_waiting_on_teacher() and conversation.teacher == self.user.teacher:
+            if (
+                conversation.conversation_state == "A-TCHER-DEND"
+                and conversation.teacher_denied
+            ):
+                re_write_btn = [
+                    self.TEACHER_REWRITE_TEXT,
+                    TeacherQuestionCompose.name,
+                    {"c_id": conversation.pk, "action": "dend_a"},
+                ]
+                _list.append([re_write_btn])
+                text = "توضیحات ادمین\n"
+                _m = conversation.denied_responses.all().last()
+                text += _m.text
+            elif (
+                conversation.conversation_state == "RA-TCHER-DEND"
+                and conversation.teacher_denied
+            ):
                 re_write_btn = [
                     self.TEACHER_REWRITE_TEXT,
                     TeacherReQuestionCompose.name,
-                    {"c_id": conversation.pk},
+                    {"c_id": conversation.pk, "action": "dend_ra"},
                 ]
                 _list.append([re_write_btn])
+                text = "توضیحات ادمین\n"
+                _m = conversation.denied_responses.all().last()
+                text += _m.text
+            elif conversation.conversation_state == "RQ-ADMIN-APPR":
+                re_write_btn = [
+                    self.TEACHER_REWRITE_TEXT,
+                    TeacherReQuestionCompose.name,
+                    {"c_id": conversation.pk, "action": "ra"},
+                ]
+                _list.append([re_write_btn])
+
             else:
                 # first select the question
                 select_btn = [
@@ -431,7 +461,6 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
         inline_btns = self._get_inline_keyboard_list(_list)
         inline_btns += self._get_default_buttons(TeacherQuestionSelect)
         # last message text
-        text = "عملیات ها:\n"
         message = self._get_message_dict(
             text=text, inline_keyboard=inline_btns, chat_id=chat_id
         )
@@ -481,6 +510,7 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
                 else:
                     # action not known
                     pass
+
         elif (
             action
             and cid
@@ -489,15 +519,22 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
             conversation = conv_models.Conversation.objects.filter(pk=cid).first()
             if conversation and action == "cnfrm":
                 _conv_hand = ConversationStateHandler(conversation)
-                _conv_hand.handle()  # Q-ADMIN-APPR -> A-TCHER-DRFT
+                _conv_hand._handle_q_admin_appr()  # Q-ADMIN-APPR -> A-TCHER-DRFT
                 conversation.teacher = self.user.teacher
                 conversation.save()
                 # self._handle_delete_messages()
+            elif conversation and action == "dend_a":
+                _conv_hand = ConversationStateHandler(conversation)
+                _conv_hand._handle_a_tcher_dend()  # A-TCHER-DEND -> A-TCHER-DRFT
+
         elif cid and self.callback_query_next_state == TeacherReQuestionCompose.name:
             conversation = conv_models.Conversation.objects.filter(pk=cid).first()
-            if conversation:
+            if conversation and action == "ra":
                 _conv_hand = ConversationStateHandler(conversation)
-                _conv_hand.handle()  # RQ-ADMIN-APPR -> RA-TCHER-DRFT
+                _conv_hand._handle_rq_admin_appr()  # RQ-ADMIN-APPR -> RA-TCHER-DRFT
+            elif conversation and action == "dend_ra":
+                _conv_hand = ConversationStateHandler(conversation)
+                _conv_hand._handle_ra_tcher_dend()  # RA-TCHER-DEND -> RA-TCHER-DRFT
 
         return super()._handle_callback_query(force_transition_type, get_message_kwargs)
 
@@ -524,10 +561,10 @@ class TeacherQuestionCompose(MessageTypeMixin, TeacherQuestionBaseState):
                 conversation = conv_models.Conversation.objects.get(
                     teacher=user.teacher, conversation_state="A-TCHER-DRFT"
                 )
+                conversation.answer.all().delete()
         except ObjectDoesNotExist as err:
             return None
         else:
-            conversation.answer.all().delete()
             conversation.answer.add(message_model)
             conversation.save()
             return conversation
@@ -613,7 +650,7 @@ class TeacherQuestionConfirm(TeacherQuestionBaseState):
             ).first()
             if conversation:
                 _conv_hand = ConversationStateHandler(conversation)
-                _conv_hand.handle()  # A-TCHER-DRFT -> A-TCHER-COMP
+                _conv_hand._handle_a_tcher_drft()  # A-TCHER-DRFT -> A-TCHER-COMP
             else:
                 text = "پرسش و پاسخ مورد نظر پیدا نشد."
                 message = self._get_message_dict(text=text, chat_id=self.chat_id)
@@ -647,11 +684,10 @@ class TeacherReQuestionCompose(MessageTypeMixin, TeacherQuestionBaseState):
                 conversation = conv_models.Conversation.objects.get(
                     teacher=user.teacher, conversation_state="RA-TCHER-DRFT"
                 )
+                conversation.re_answer.all().delete()
         except ObjectDoesNotExist as err:
             return None
         else:
-            conversation = conv_models.Conversation.objects.filter(teacher=self.user.t)
-            conversation.re_answer.all().delete()
             conversation.re_answer.add(message_model)
             conversation.save()
             return conversation
@@ -737,7 +773,7 @@ class TeacherReQuestionConfirm(TeacherQuestionBaseState):
             ).first()
             if conversation:
                 _conv_hand = ConversationStateHandler(conversation)
-                _conv_hand.handle()  # RA-TCHER-DRFT -> RA-TCHER-COMP
+                _conv_hand._handle_ra_tcher_drft()  # RA-TCHER-DRFT -> RA-TCHER-COMP
             else:
                 text = "پرسش و پاسخ مورد نظر پیدا نشد."
                 message = self._get_message_dict(text=text, chat_id=self.chat_id)
