@@ -16,7 +16,7 @@ from bot import models as bot_models
 from bot import utils
 from conversation import models as conv_models
 from conversation.handlers import ConversationStateHandler
-from billing.models import TeacherPayment
+from billing.models import TeacherPayment, Invoice
 
 
 def get_conversation_list_display(conversatoins_query):
@@ -168,6 +168,7 @@ class AdminHome(AdminBaseState):
             AdminQuestionManager.name: AdminQuestionManager,
             AdminTeacherManager.name: AdminTeacherManager,
             AdminTeacherPaymentManager.name: AdminTeacherPaymentManager,
+            AdminInvoiceList.name: AdminInvoiceList,
             AdminInfoManager.name: AdminInfoManager,
         }
 
@@ -1313,5 +1314,28 @@ class AdminTeacherPaymentHistory(AdminTeacherPaymentBaseState):
         inline_btns = self._get_default_buttons(AdminTeacherPaymentManager)
         message = self._get_message_dict(
             chat_id=chat_id, text=text, inline_keyboard=inline_btns
+        )
+        return message
+
+
+# invoices
+class AdminInvoiceList(AdminBaseState):
+    name = "ADMIN_invoice_list"
+    text = "تمام پرداخت ها"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_input_types = [self.CALLBACK_QUERY]
+        self.expected_states = {
+            AdminHome.name: AdminHome,
+            AdminInvoiceList.name: AdminInvoiceList,
+        }
+
+    def get_message(self, chat_id=None):
+        all_paid_invoices = Invoice.get_successful()
+        text = Invoice.display_list(all_paid_invoices)
+        inline_btns = self._get_default_buttons()
+        message = self._get_message_dict(
+            text=text, inline_keyboard=inline_btns, chat_id=chat_id
         )
         return message

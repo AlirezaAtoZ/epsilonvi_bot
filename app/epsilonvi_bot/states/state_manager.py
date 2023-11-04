@@ -56,6 +56,7 @@ class StateManager(object):
         admin.AdminTeacherPaymentManager.name: admin.AdminTeacherPaymentManager,
         admin.AdminTeacherPaymentDetail.name: admin.AdminTeacherPaymentDetail,
         admin.AdminTeacherPaymentHistory.name: admin.AdminTeacherPaymentHistory,
+        admin.AdminInvoiceList.name: admin.AdminInvoiceList,
         teacher.TeacherHome.name: teacher.TeacherHome,
         teacher.TeacherInfoManager.name: teacher.TeacherInfoManager,
         teacher.TeacherInfoName.name: teacher.TeacherInfoName,
