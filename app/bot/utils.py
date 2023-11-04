@@ -1,3 +1,4 @@
+import logging
 import os
 import copy
 import asyncio
@@ -7,6 +8,8 @@ from django.conf import settings
 
 
 def send_group_message(data, users=None, message_type="TXT"):
+    logger = logging.getLogger(__name__)
+    logger.error(f"sending message to: {users=}")
     asyncio.run(_send_group_message(data, users, message_type=message_type))
 
 

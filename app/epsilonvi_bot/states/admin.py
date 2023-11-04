@@ -206,14 +206,14 @@ class AdminSendGroupMessage(MessageTypeMixin, AdminBaseState):
         }
 
     def get_message(self, chat_id=None):
-        text = "پیام خود را ارسال کنید (تصویر یا متن)"
+        text = "پیام خود را ارسال کنید (تصویر یا متن). گیرنده پیام را پس از ارسال این پیام مشخص کنید.\n"
         inline_keyboard = self._get_default_buttons()
         message = self._get_message_dict(
             chat_id=chat_id, text=text, inline_keyboard=inline_keyboard
         )
         return message
 
-    def _handle_base_type(self, user, message_model):
+    def _handle_base_type(self, user, message_model, conversation_id):
         special_message = eps_models.SpecialMessage.objects.create(
             message=message_model,
             admin=user.admin,
@@ -222,12 +222,18 @@ class AdminSendGroupMessage(MessageTypeMixin, AdminBaseState):
 
     def _handle_text_type(self):
         return super()._handle_text_type(
-            self.message_id, self.chat_id, self.user, self.input_text
+            message_id=self.message_id,
+            chat_id=self.chat_id,
+            user=self.user,
+            input_text=self.input_text,
         )
 
     def _handle_photo_type(self):
         return super()._handle_photo_type(
-            self.data, self.message_id, self.chat_id, self.user
+            message_id=self.message_id,
+            chat_id=self.chat_id,
+            user=self.user,
+            data=self.data,
         )
 
     def _handle_message(self):
