@@ -101,3 +101,15 @@ class CanPayTeacher(PermissionBase):
 
     def __init__(self) -> None:
         super().__init__()
+
+
+class IsStudent(PermissionBase):
+    name = "is_student"
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def has_permission(self, user):
+        if (user.student.grade != "UNKWN") and user.phone_number:
+            return True
+        return False

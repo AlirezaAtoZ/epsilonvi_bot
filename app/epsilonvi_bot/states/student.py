@@ -10,6 +10,7 @@ from conversation import models as conv_models
 from conversation import handlers
 from bot import models as bot_models
 from epsilonvi_bot import models as eps_models
+from epsilonvi_bot import permissions as perm
 from billing import models as bil_models
 
 # TODO remove double queries
@@ -154,6 +155,7 @@ class StudentHome(BaseState):
         # self.expected_input_types.append(self.MESSAGE)
 
         self.expected_states = {
+            StudentHome.name: StudentHome,
             StudentQuestionManager.name: StudentQuestionManager,
             StudentPackageManager.name: StudentPackageManager,
             StudentEditInfo.name: StudentEditInfo,
@@ -379,8 +381,35 @@ class StudentPackageBaseState(StudentBaseState):
             StudentPackageConfirm.name: StudentPackageConfirm,
             StudentPackageAdd.name: StudentPackageAdd,
             StudentPackageInvoice.name: StudentPackageInvoice,
+            StudentEditInfo.name: StudentEditInfo,
         }
         self.expected_input_types = [self.CALLBACK_QUERY]
+        self.permissions = [perm.IsStudent]
+    
+    def _has_permission(self):
+        for _perm in self.permissions:
+            permission = _perm()
+            if not permission.has_permission(self.user):
+                return False
+        return True
+
+    def _get_not_student_message(self, chat_id):
+        text = "به منظور اعمال پشتیبانی مناسب، لطفا مشخصات کاربری (شماره تماس و پایه تحصیلی) خود را تکمیل نمایید."
+        _list = [
+            [[StudentEditInfo.text, StudentEditInfo.name, ""]],
+            [[StudentHome.text, StudentHome.name, ""]],
+        ]
+        inline_btn = self._get_inline_keyboard_list(_list)
+        message = self._get_message_dict(text=text, inline_keyboard=inline_btn, chat_id=chat_id)
+        return message
+
+    def handle(self):
+        if not self._has_permission():
+            msg = self._get_not_student_message(chat_id=self.chat_id)
+            self._set_user_state(StudentHome)
+            self.transition(msg, self.message_id)
+            return HttpResponse("ok")
+        return super().handle()
 
 
 class StudentPackageManager(StudentPackageBaseState):
