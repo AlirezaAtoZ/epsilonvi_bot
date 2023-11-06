@@ -338,6 +338,7 @@ class AdminSendGroupMessageConfirm(MessageTypeMixin, AdminBaseState):
             special_message.message.get_message_dict(),
             users,
             message_type=special_message.message.message_type,
+            summary_user=self.user,
         )
 
         return super()._handle_callback_query(
