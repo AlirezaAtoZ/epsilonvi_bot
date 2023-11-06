@@ -1,5 +1,6 @@
 import logging
 
+from django.http import HttpResponse
 from .states.state_manager import StateManager
 from .commands import CommandManager
 
@@ -45,6 +46,7 @@ class Other(BaseHandler):
         msg = "[CUSTOM ERROR] [OTHER HANDLER]\t"
         msg += f"{self._tlg_res}"
         self.logger.error(msg=msg)
+        return HttpResponse("nok")
 
 
 class HandlerManager:
