@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import timedelta
 import operator
 from pyexpat import model
 
 from django.db import models
+from django.utils import timezone
 
 from user import models as usr_models
 from bot import models as bot_models
@@ -117,7 +118,7 @@ class Conversation(models.Model):
     )
 
     question = models.ManyToManyField(bot_models.Message, related_name="question")
-    question_date = models.DateTimeField(auto_now_add=True)
+    question_date = models.DateTimeField(null=True, blank=True)
     question_approved_by = models.ForeignKey(
         "epsilonvi_bot.Admin",
         on_delete=models.CASCADE,
@@ -209,6 +210,17 @@ class Conversation(models.Model):
         max_length=13, choices=CONVERSATION_STATES, default="Z-NKNWN-ZERO"
     )
 
+    def save(self, *args, **kwargs):
+        if self.conversation_state == "Q-ADMIN-APPR" and (not self.question_date):
+            self.question_date = timezone.now()
+        elif self.conversation_state == "A-ADMIN-APPR" and (not self.answer_date):
+            self.answer_date = timezone.now()
+        elif self.conversation_state == "RQ-ADMIN-APPR" and (not self.re_question_date):
+            self.re_question_date = timezone.now()
+        elif self.conversation_state == "RA-ADMIN-APPR" and (not self.re_answer_date):
+            self.re_answer_date = timezone.now()
+        super().save(*args, **kwargs)
+
     def __str__(self) -> str:
         return f"{self.student}"
 
@@ -267,3 +279,19 @@ class Conversation(models.Model):
             sorted(unpaid_dict.items(), key=operator.itemgetter(1))
         )
         return unpaid_dict_sorted
+
+    def is_waiting_too_long(self):
+        now = timezone.now()
+        if (
+            self.conversation_state == "A-ADMIN-APPR"
+            and self.answer_date
+            and (now - self.answer_date >= timedelta(days=1))
+        ):
+            return True
+        elif (
+            self.conversation_state == "RA-ADMIN-APPR"
+            and self.re_answer_date
+            and (now - self.re_answer_date >= timedelta(days=1))
+        ):
+            return True
+        return False
