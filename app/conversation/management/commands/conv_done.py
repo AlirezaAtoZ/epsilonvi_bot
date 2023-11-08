@@ -19,5 +19,6 @@ class Command(BaseCommand):
             _text = text.format(c.get_telegram_command())
             users = [c.student.user]
             c.conversation_state = "C-CONVR-DONE"
+            c.is_done=True
             c.save()
             utils.send_group_message(data={"text": _text}, users=users)
