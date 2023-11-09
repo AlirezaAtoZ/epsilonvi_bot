@@ -118,7 +118,7 @@ class Conversation(models.Model):
     )
 
     question = models.ManyToManyField(bot_models.Message, related_name="question")
-    question_date = models.DateTimeField(null=True, blank=True)
+    question_date = models.DateTimeField(blank=True, null=True)
     question_approved_by = models.ForeignKey(
         "epsilonvi_bot.Admin",
         on_delete=models.CASCADE,
