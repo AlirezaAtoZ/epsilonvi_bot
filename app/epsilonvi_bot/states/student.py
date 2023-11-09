@@ -247,12 +247,13 @@ class StudentEditInfo(StudentBaseState):
 
     def _handle_callback_query(self):
         http_response = super()._handle_callback_query()
-        _dict = {
-            # "update": self.message_id,
-            "delete": self.sent_message_id,
-        }
-        self.user.userstate.message_ids = json.dumps(_dict)
-        self.user.userstate.save()
+        # _dict = {
+        #     # "update": self.message_id,
+        #     "delete": self.sent_message_id,
+        # }
+        # self.user.userstate.message_ids = json.dumps(_dict)
+        # self.user.userstate.save()
+        self.save_message_ids(delete_ids=[self.message_id])
         return http_response
 
 
@@ -266,10 +267,11 @@ class StudentBaseEditInfo(StudentBaseState):
         new_value = self.input_text
         setattr(self.user, self.field_name, new_value)
         self.user.save()
-        _msg_ids = self.user.userstate.message_ids
-        _msg_ids = json.loads(_msg_ids)
-        # to_update = _msg_ids["update"]
-        to_delete = _msg_ids["delete"]
+        # _msg_ids = self.user.userstate.message_ids
+        # _msg_ids = json.loads(_msg_ids)
+        # # to_update = _msg_ids["update"]
+        # to_delete = _msg_ids["delete"]
+        to_delete = self.get_message_ids("delete")
 
         message = self._get_message_dict(message_id=to_delete)
         self.delete_message(message)
