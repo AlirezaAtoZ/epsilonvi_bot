@@ -1,10 +1,11 @@
+import json
 import random
 import string
 
 from django.db import models
 from bot import models as bot_models
 from user import models as usr_models
-
+from epsilonvi_bot import permissions as perm
 from conversation.models import Conversation
 
 random.random()
@@ -88,6 +89,12 @@ class Admin(models.Model):
     def __str__(self) -> str:
         return f"{self.user}"
 
+    @classmethod
+    def create_admin(cls, user):
+        permissions = [perm.IsAdmin.name, perm.AddAdmin.name]
+        _json = json.dumps(permissions)
+        admin = cls.objects.create(user=user, is_active=True, permissions=_json)
+        return admin
 
 def generate_code():
     letters = string.ascii_lowercase
