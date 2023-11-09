@@ -395,6 +395,11 @@ class ConversationStateHandler:
         else:
             return False
 
+    def is_waiting_new_teacher(self):
+        if self._conv.conversation_state == "Q-ADMIN-APPR" and self._conv.teacher == None:
+            return True
+        return False
+
     def is_waiting_denied(self):
         _true_states = ["A-TCHER-DEND"]
         if self._conv.conversation_state in _true_states:

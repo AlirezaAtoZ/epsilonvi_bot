@@ -443,20 +443,20 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
                 ]
                 _list.append([re_write_btn])
 
-            else:
-                # first select the question
-                select_btn = [
-                    self.APPROVE_BUTTON,
-                    TeacherQuestionDetail.name,
-                    {"c_id": conversation.pk, "action": "appr"},
-                ]
-                # then confirm the question
-                confirm_btn = [
-                    self.CONFIRM_BUTTON,
-                    TeacherQuestionCompose.name,
-                    {"c_id": conversation.pk, "action": "cnfrm"},
-                ]
-                _list.append([confirm_btn]) if confirm else _list.append([select_btn])
+        elif _ch.is_waiting_new_teacher():
+            select_btn = [
+                self.APPROVE_BUTTON,
+                TeacherQuestionDetail.name,
+                {"c_id": conversation.pk, "action": "appr"},
+            ]
+            # then confirm the question
+            confirm_btn = [
+                self.CONFIRM_BUTTON,
+                TeacherQuestionCompose.name,
+                {"c_id": conversation.pk, "action": "cnfrm"},
+            ]
+            _list.append([confirm_btn]) if confirm else _list.append([select_btn])
+
         # add home and back button
         inline_btns = self._get_inline_keyboard_list(_list)
         inline_btns += self._get_default_buttons(TeacherQuestionSelect)
