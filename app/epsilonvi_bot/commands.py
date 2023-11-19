@@ -214,14 +214,28 @@ class Conversation(CommandBase):
         return http_response
 
     def _handle_student_conversation_detail(self, conversation):
-        _conv_dtl_state = StudentQuestionDetail(self._tlg_res, self.user)
-        http_response = _conv_dtl_state._handle_send_messages(conversation=conversation)
-        return http_response
+        if conversation.student == self.user.student:
+            _conv_dtl_state = StudentQuestionDetail(self._tlg_res, self.user)
+            http_response = _conv_dtl_state._handle_send_messages(
+                conversation=conversation
+            )
+            return http_response
+        else:
+            text = "شما اجازه دسترسی به این قسمت را ندارید.\n /start"
+            self.send_text({"chat_id": self.chat_id, "text": text})
+            return HttpResponse("nok")
 
     def _handle_teacher_conversation_detail(self, conversation):
-        _conv_dtl_state = TeacherQuestionDetail(self._tlg_res, self.user)
-        http_response = _conv_dtl_state._handle_send_messages(conversation=conversation)
-        return http_response
+        if conversation.teacher is None or conversation.teacher == self.user.teacher:
+            _conv_dtl_state = TeacherQuestionDetail(self._tlg_res, self.user)
+            http_response = _conv_dtl_state._handle_send_messages(
+                conversation=conversation
+            )
+            return http_response
+        else:
+            text = "شما اجازه دسترسی به این قسمت را ندارید.\n /start"
+            self.send_text({"chat_id": self.chat_id, "text": text})
+            return HttpResponse("nok")
 
     def handle(self, conversation_id):
         _q = conv_models.Conversation.objects.filter(pk=conversation_id)
