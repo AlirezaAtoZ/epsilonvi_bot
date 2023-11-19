@@ -388,7 +388,7 @@ class StudentPackageBaseState(StudentBaseState):
         }
         self.expected_input_types = [self.CALLBACK_QUERY]
         self.permissions = [perm.IsStudent]
-    
+
     def _has_permission(self):
         for _perm in self.permissions:
             permission = _perm()
@@ -403,7 +403,9 @@ class StudentPackageBaseState(StudentBaseState):
             [[StudentHome.text, StudentHome.name, ""]],
         ]
         inline_btn = self._get_inline_keyboard_list(_list)
-        message = self._get_message_dict(text=text, inline_keyboard=inline_btn, chat_id=chat_id)
+        message = self._get_message_dict(
+            text=text, inline_keyboard=inline_btn, chat_id=chat_id
+        )
         return message
 
     def handle(self):
@@ -1099,6 +1101,7 @@ class StudentQuestionDetail(ConversationDetailMixin, StudentQuestionBaseState):
                 and action == "deny"
                 and self.callback_query_next_state == StudentQuestionDeny.name
             ):
+                self.user.student.delete_draft_re_questions()
                 _conv_handle = handlers.ConversationStateHandler(conversation)
                 _conv_handle._handle_a_admin_appr(
                     "deny"

@@ -10,7 +10,7 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any):
         convs = Conversation.objects.filter(
-            conversation_state__in=["A-ADMIN-APPR", "RA-ADMIN-APPR"]
+            conversation_state__in=["A-ADMIN-APPR", "RA-ADMIN-APPR", "RQ-STDNT-DRFT"]
         )
         text = "وضعیت مکالمه {} به خاتمه یافته تغییر کرد."
         for c in convs:

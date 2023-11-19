@@ -10,7 +10,7 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any):
         convs = Conversation.objects.filter(
-            conversation_state__in=["A-ADMIN-APPR", "RA-ADMIN-APPR"]
+            conversation_state__in=["A-ADMIN-APPR", "RA-ADMIN-APPR", "RQ-STDNT-DRFT"]
         )
         text = "پرسش شما در مکالمه {} پاسخ داده شده.\nاین مکالمه تا پایان امروز به صورت خودکار بسته خواهد شد."
         text += "شما می توانید با انتخاب دستور موجود در همین پیام نسبت به تکمیل یا پیگیری مکالمه اقدام نمایید."

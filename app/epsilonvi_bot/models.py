@@ -50,9 +50,15 @@ class Teacher(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user}"
-    
+
     def get_unpaid_conversations(self):
         convs = Conversation.objects.filter(teacher=self, is_done=True, is_paid=False)
+        return convs
+
+    def get_draft_conversations(self):
+        convs = Conversation.objects.filter(
+            teacher=self, conversation_state="A-TCHER-DRFT"
+        )
         return convs
 
 
@@ -78,6 +84,18 @@ class Student(models.Model):
     def __str__(self) -> str:
         return f"{self.user.name} {self.get_grade_display()}"
 
+    def get_draft_re_questions(self):
+        convs = Conversation.objects.filter(
+            student=self, conversation_state="RQ-STDNT-DRFT"
+        )
+        return convs
+    
+    def delete_draft_re_questions(self):
+        convs = self.get_draft_re_questions()
+        for c in convs:
+            c.conversation_state = "A-ADMIN-APPR"
+            c.re_question.delete()
+            c.save()
 
 class Admin(models.Model):
     user = models.OneToOneField(usr_models.User, on_delete=models.CASCADE)
@@ -95,6 +113,7 @@ class Admin(models.Model):
         _json = json.dumps(permissions)
         admin = cls.objects.create(user=user, is_active=True, permissions=_json)
         return admin
+
 
 def generate_code():
     letters = string.ascii_lowercase

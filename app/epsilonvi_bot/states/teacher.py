@@ -306,7 +306,26 @@ class TeacherQuestionSelect(TeacherQuestionBaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
 
+    def is_teacher_on_draft(self):
+        convs = self.user.teacher.get_draft_conversations()
+        if convs.exists():
+            return (True, convs)
+        else:
+            return (False, convs)
+
     def get_message(self, chat_id=None, selected_field=None):
+        _has_other_convs, convs = self.is_teacher_on_draft()
+        if _has_other_convs:
+            text = "شما مکالمه پاسخ داده نشده دارید. لطفا ابتدا به مکالمات قبل پاسخ دهید.\n"
+            text += "مکالمه های بدون پاسخ: "
+            l = ""
+            for c in convs:
+                l += c.get_telegram_command() + " "
+            text += l
+            inline_btns = self._get_default_buttons(TeacherQuestionManager)
+            message = self._get_message_dict(text=text, inline_keyboard=inline_btns)
+            return message
+
         text = ""
         _list = []
         help_dict = {
@@ -402,12 +421,34 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
     def __init__(self, telegram_response_body, user) -> None:
         super().__init__(telegram_response_body, user)
 
+    def is_teacher_on_draft(self):
+        convs = self.user.teacher.get_draft_conversations()
+        if convs.exists():
+            return (True, convs)
+        else:
+            return (False, convs)
+
     def get_message(
         self, conversation: conv_models.Conversation, confirm=False, chat_id=None
     ):
         _list = []
         _ch = ConversationStateHandler(conversation)
         text = "عملیات ها:\n"
+
+        # First check if the teacher has selected another conversation
+        # teachers must answer the questions at first and then select
+        # another conversation.
+        _t_has_draft, convs = self.is_teacher_on_draft()
+        if _t_has_draft and not (conversation in convs):
+            text += "شما پرسش پاسخ داده نشده دارید. لطفا ابتدا به پرسش قبل پاسخ دهید تا امکان قبول سوال جدید برای شما فعال شود.\n"
+            l = "مکالمات قبل:"
+            for c in convs:
+                l += c.get_telegram_command() + " "
+            text += l
+            inline_btns = self._get_default_buttons(TeacherQuestionManager)
+            message = self._get_message_dict(text=text, inline_keyboard=inline_btns)
+            return message
+
         if _ch.is_waiting_on_teacher() and conversation.teacher == self.user.teacher:
             if (
                 conversation.conversation_state == "A-TCHER-DEND"
@@ -435,13 +476,24 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
                 text = "توضیحات ادمین\n"
                 _m = conversation.denied_responses.all().last()
                 text += _m.text
-            elif conversation.conversation_state == "RQ-ADMIN-APPR":
+
+            elif conversation.conversation_state in ["RQ-ADMIN-APPR", "RA-TCHER-DRFT"]:
                 re_write_btn = [
                     self.TEACHER_REWRITE_TEXT,
                     TeacherReQuestionCompose.name,
                     {"c_id": conversation.pk, "action": "ra"},
                 ]
                 _list.append([re_write_btn])
+
+            # If teacher has already accepted this conversation but did not
+            # compose the answer.
+            elif conversation.conversation_state == "A-TCHER-DRFT":
+                select_btn = [
+                    self.APPROVE_BUTTON,
+                    TeacherQuestionCompose.name,
+                    {"c_id": conversation.pk, "action": "answr"},
+                ]
+                _list.append([select_btn])
 
         elif _ch.is_waiting_new_teacher():
             select_btn = [
@@ -456,6 +508,7 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
                 {"c_id": conversation.pk, "action": "cnfrm"},
             ]
             _list.append([confirm_btn]) if confirm else _list.append([select_btn])
+        # elif conversation.conversation_state = " "
 
         # add home and back button
         inline_btns = self._get_inline_keyboard_list(_list)

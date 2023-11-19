@@ -375,7 +375,7 @@ class ConversationStateHandler:
             return False
 
     def is_waiting_on_student(self):
-        _true_states = ["A-ADMIN-APPR", "Q-STDNT-DEND"]
+        _true_states = ["A-ADMIN-APPR", "Q-STDNT-DEND", "RQ-STNDT-DRFT"]
         if self._conv.conversation_state in _true_states:
             return True
         else:
@@ -389,14 +389,24 @@ class ConversationStateHandler:
             return False
 
     def is_waiting_on_teacher(self):
-        _true_states = ["Q-ADMIN-APPR", "RQ-ADMIN-APPR", "A-TCHER-DEND", "RA-TCHER-DEND"]
+        _true_states = [
+            "Q-ADMIN-APPR",
+            "RQ-ADMIN-APPR",
+            "A-TCHER-DEND",
+            "RA-TCHER-DEND",
+            "A-TCHER-DRFT",
+            "RA-TCHER-DRFT",
+        ]
         if self._conv.conversation_state in _true_states:
             return True
         else:
             return False
 
     def is_waiting_new_teacher(self):
-        if self._conv.conversation_state == "Q-ADMIN-APPR" and self._conv.teacher == None:
+        if (
+            self._conv.conversation_state == "Q-ADMIN-APPR"
+            and self._conv.teacher == None
+        ):
             return True
         return False
 
