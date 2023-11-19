@@ -93,14 +93,16 @@ DATABASES = {
         "PASSWORD": os.environ.get("MYSQL_PASSWORD"),
         "HOST": os.environ.get("MYSQL_HOST"),
         "PORT": os.environ.get("MYSQL_PORT"),
-        # "OPTIONS": {
-        #     # "charset": "utf8mb4",
-        #     "collation": " utf8_general_ci",
-        # },
+        "OPTIONS": {
+            "charset": "utf8mb4",
+            "collation": " utf8mb4_unicode_ci",
+            "use_unicode": True,
+        },
         "TEST": {
             "NAME": os.environ.get("MYSQL_TEST_DATABASE"),
             "CHARSET": "utf8mb4",
-            "COLLATION": " utf8mb4_general_ci",
+            "COLLATION": " utf8mb4_unicode_ci",
+            "USE_UNICODE": True,
         },
     }
 }

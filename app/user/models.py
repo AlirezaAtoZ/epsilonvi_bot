@@ -57,3 +57,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def get_name_inline_link(self):
         return f"[{self.name}](tg://user?id={self.telegram_id})"
+
+    def get_student_info_display(self):
+        text = "نام:\n"
+        if self.name:
+            text += f"{self.name}\n"
+        text += "شماره موبایل:\n"
+        if self.phone_number:
+            text += f"{self.phone_number}\n"
+        text += "مقطع تحصیلی:\n"
+        text += f"{self.student.get_grade_display()}\n"
+        return text

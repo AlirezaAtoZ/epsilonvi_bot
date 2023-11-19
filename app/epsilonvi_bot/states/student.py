@@ -232,7 +232,7 @@ class StudentEditInfo(StudentBaseState):
         }
 
     def get_message(self, chat_id=None):
-        text = print_user_detailed(self.user)
+        text = self.user.get_student_info_display()
         _list = [
             [(StudentEditInfoName.text, StudentEditInfoName.name, "")],
             [(StudentEditInfoPhoneNumber.text, StudentEditInfoPhoneNumber.name, "")],
@@ -264,8 +264,9 @@ class StudentBaseEditInfo(StudentBaseState):
         self.field_name = ""
 
     def _handle_message(self):
-        new_value = self.input_text
-        setattr(self.user, self.field_name, new_value)
+        if self.input_text:
+            new_value = self.input_text
+            setattr(self.user, self.field_name, new_value)
         self.user.save()
         # _msg_ids = self.user.userstate.message_ids
         # _msg_ids = json.loads(_msg_ids)
