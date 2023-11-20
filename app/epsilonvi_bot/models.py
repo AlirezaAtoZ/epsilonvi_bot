@@ -89,13 +89,14 @@ class Student(models.Model):
             student=self, conversation_state="RQ-STDNT-DRFT"
         )
         return convs
-    
+
     def delete_draft_re_questions(self):
         convs = self.get_draft_re_questions()
         for c in convs:
             c.conversation_state = "A-ADMIN-APPR"
             c.re_question.delete()
             c.save()
+
 
 class Admin(models.Model):
     user = models.OneToOneField(usr_models.User, on_delete=models.CASCADE)

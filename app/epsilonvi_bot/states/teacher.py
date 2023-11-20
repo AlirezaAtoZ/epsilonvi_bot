@@ -12,7 +12,7 @@ from epsilonvi_bot.states.base import (
 from user import models as usr_models
 from conversation import models as conv_models
 from conversation.handlers import ConversationStateHandler
-
+from billing import models as bil_models
 
 # TODO check for text input type
 
@@ -123,6 +123,7 @@ class TeacherHome(ButtonsListMixin, TeacherBaseState):
         super().__init__(telegram_response_body, user)
         self.expected_states = {
             TeacherInfoManager.name: TeacherInfoManager,
+            TeacherPaymentManager.name: TeacherPaymentManager,
             TeacherQuestionManager.name: TeacherQuestionManager,
         }
 
@@ -132,6 +133,7 @@ class TeacherHome(ButtonsListMixin, TeacherBaseState):
         # self.logger.error(f"{text=}")
         states = [
             TeacherQuestionManager,
+            TeacherPaymentManager,
             TeacherInfoManager,
         ]
         message = self.get_state_buttons(
@@ -144,6 +146,7 @@ class TeacherHome(ButtonsListMixin, TeacherBaseState):
         return message
 
 
+# info manager
 class TeacherInfoBaseState(TeacherBaseState):
     text_2 = ""
 
@@ -836,3 +839,62 @@ class TeacherReQuestionConfirm(TeacherQuestionBaseState):
                 self.logger.error(msg=msg)
 
         return super()._handle_callback_query()
+
+
+# payment manager
+class TeacherPaymentBaseState(TeacherBaseState):
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+        self.expected_input_types = [self.CALLBACK_QUERY]
+        self.expected_states = {
+            TeacherHome.name: TeacherHome,
+            TeacherPaymentManager.name: TeacherPaymentManager,
+            TeacherPaymentHistory.name: TeacherPaymentHistory,
+        }
+
+
+class TeacherPaymentManager(TeacherPaymentBaseState):
+    name = "TCHER_payment_manager"
+    text = "مدیریت مالی"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+
+    def get_message(self, chat_id=None):
+        text = "صورت حساب پرداخت نشده شما\n"
+        _unpaid_convs = self.user.teacher.get_unpaid_conversations()
+        total_value = 0
+        l = "مکالمات: "
+        for c in _unpaid_convs:
+            total_value += c.conversation_value()
+            l += c.get_telegram_command() + " "
+        text += f"مجموع: {total_value}\n"
+        text += l
+
+        _list = []
+        btn = [TeacherPaymentHistory.text, TeacherPaymentHistory.name, ""]
+        _list.append([btn])
+        inline_btns = self._get_inline_keyboard_list(_list)
+        inline_btns += self._get_default_buttons()
+
+        message = self._get_message_dict(text=text, inline_keyboard=inline_btns)
+        return message
+
+
+class TeacherPaymentHistory(TeacherPaymentBaseState):
+    name = "TCHER_payment_history"
+    text = "تاریخچه پرداخت ها"
+
+    def __init__(self, telegram_response_body, user) -> None:
+        super().__init__(telegram_response_body, user)
+
+    def get_message(self, chat_id=None):
+        text = "صورت حساب های پرداخت شده:\n"
+        tps = bil_models.TeacherPayment.objects.filter(teacher=self.user.teacher)
+        for i, tp in enumerate(tps):
+            text += str(i+1) + "- " + tp.get_teacher_info_display() + "\n"
+
+        inline_btns = self._get_default_buttons(TeacherPaymentManager)
+
+        message = self._get_message_dict(text=text, inline_keyboard=inline_btns)
+        return message

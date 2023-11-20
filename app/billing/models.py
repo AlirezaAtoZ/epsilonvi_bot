@@ -12,9 +12,25 @@ class TeacherPayment(models.Model):
     )
     amount = models.BigIntegerField()
     date = models.DateTimeField(auto_now_add=True)
+    conversations = models.ManyToManyField("conversation.Conversation", blank=True)
 
     def __str__(self) -> str:
         return f"{self.teacher} {self.date} {self.amount}"
+    
+    def get_teacher_info_display(self):
+        text = f"مقدار پرداخت شده: {self.amount}\n"
+        text += f"تاریخ پرداخت: {self.date.date()}\n"
+        l = ""
+        for c in self.conversations.all():
+            l += c.get_telegram_command() + ""
+        text += f"پرداخت مربوط به مکالمات: {l}\n"
+        return text
+    
+    def get_admin_info_display(self):
+        text = f"دبیر: {self.teacher.user.name}\n"
+        text += f"مقدار پرداخت شده: {self.amount}\n"
+        text += f"تاریخ پرداخت: {self.date.date()}\n"
+        return text
 
 
 class Invoice(models.Model):

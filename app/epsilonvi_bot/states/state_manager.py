@@ -62,6 +62,8 @@ class StateManager(object):
         teacher.TeacherInfoName.name: teacher.TeacherInfoName,
         teacher.TeacherInfoPhoneNumber.name: teacher.TeacherInfoPhoneNumber,
         teacher.TeacherInfoCreditCard.name: teacher.TeacherInfoCreditCard,
+        teacher.TeacherPaymentManager.name: teacher.TeacherPaymentManager,
+        teacher.TeacherPaymentHistory.name: teacher.TeacherPaymentHistory,
         teacher.TeacherHome.name: teacher.TeacherHome,
         teacher.TeacherQuestionManager.name: teacher.TeacherQuestionManager,
         teacher.TeacherQuestionSelect.name: teacher.TeacherQuestionSelect,

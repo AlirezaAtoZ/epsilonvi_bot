@@ -1279,13 +1279,16 @@ class AdminTeacherPaymentDetail(AdminTeacherPaymentBaseState):
                 )
                 if teacher and conversations:
                     convs_value = 0
+                    _convs_list = []
                     for c in conversations:
                         c.is_paid = True
                         c.save()
                         convs_value += c.conversation_value()
-                    _ = TeacherPayment.objects.create(
+                        _convs_list.append(c)
+                    tp = TeacherPayment.objects.create(
                         teacher=teacher, amount=convs_value
                     )
+                    tp.conversations.add(*_convs_list)
                     get_message_kwargs = {"teacher": teacher}
             elif tid and action == "confirm":
                 teacher = eps_models.Teacher.objects.filter(pk=tid).first()
@@ -1310,8 +1313,7 @@ class AdminTeacherPaymentHistory(AdminTeacherPaymentBaseState):
         text = "لیست پرداخت ها\n"
         teacher_payments = TeacherPayment.objects.all()
         for idx, tp in enumerate(teacher_payments):
-            _line = f"{idx+1}- دبیر: {tp.teacher.user.name} تاریخ پرداخت: {tp.date} مقدار پرداخت شده: {tp.amount}\n"
-            text += _line
+            text += f"{idx+1}- {tp.get_admin_info_display()}\n"
         inline_btns = self._get_default_buttons(AdminTeacherPaymentManager)
         message = self._get_message_dict(
             chat_id=chat_id, text=text, inline_keyboard=inline_btns
