@@ -992,7 +992,9 @@ class StudentQuestionConfirm(StudentQuestionBaseState):
             else:
                 _h = handlers.ConversationStateHandler(conversation)
                 _h._handle_q_stdnt_drft()
-
+                text = f"پرسش شما با کد {conversation.get_telegram_command()} با موفقیت ثبت شد.\n"
+                message = self._get_message_dict(text=text, chat_id=self.chat_id)
+                self.send_text(message)
                 return super()._handle_callback_query()
 
         return super()._handle_callback_query()
@@ -1281,6 +1283,9 @@ class StudentQuestionDenyConfirm(StudentQuestionBaseState):
             if conversation and not action:
                 _conv_hand = handlers.ConversationStateHandler(conversation)
                 _conv_hand._handle_rq_stdnt_drft()  # RQ-STDNT-DRFT -> RQ-STDNT-COMP
+                text = f"اعتراض شما به مکالمه {conversation.get_telegram_command()} با موفقیت ثبت شد.\n"
+                message = self._get_message_dict(text=text, chat_id=self.chat_id)
+                self.send_text(message)
             elif conversation and action == "approve":
                 _conv_hand = handlers.ConversationStateHandler(conversation)
                 _conv_hand._handle_a_stdnt_appr()  # C-CNVR-DONE

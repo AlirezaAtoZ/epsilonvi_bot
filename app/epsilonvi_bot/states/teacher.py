@@ -707,6 +707,9 @@ class TeacherQuestionConfirm(TeacherQuestionBaseState):
             if conversation:
                 _conv_hand = ConversationStateHandler(conversation)
                 _conv_hand._handle_a_tcher_drft()  # A-TCHER-DRFT -> A-TCHER-COMP
+                text = f"پاسخ شما به مکالمه {conversation.get_telegram_command()} با موفقیت ثبت شد."
+                message = self._get_message_dict(text=text, chat_id=self.chat_id)
+                self.send_text(message)
             else:
                 text = "پرسش و پاسخ مورد نظر پیدا نشد."
                 message = self._get_message_dict(text=text, chat_id=self.chat_id)
@@ -830,6 +833,9 @@ class TeacherReQuestionConfirm(TeacherQuestionBaseState):
             if conversation:
                 _conv_hand = ConversationStateHandler(conversation)
                 _conv_hand._handle_ra_tcher_drft()  # RA-TCHER-DRFT -> RA-TCHER-COMP
+                text = f"پاسخ مجدد شما به مکالمه {conversation.get_telegram_command()} با موفقیت ثبت شد."
+                message = self._get_message_dict(text=text, chat_id=self.chat_id)
+                self.send_text(message)
             else:
                 text = "پرسش و پاسخ مورد نظر پیدا نشد."
                 message = self._get_message_dict(text=text, chat_id=self.chat_id)
