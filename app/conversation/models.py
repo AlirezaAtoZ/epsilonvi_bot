@@ -213,11 +213,11 @@ class Conversation(models.Model):
     def save(self, *args, **kwargs):
         if self.conversation_state == "Q-ADMIN-APPR" and (not self.question_date):
             self.question_date = timezone.now()
-        elif self.conversation_state == "A-ADMIN-APPR" and (not self.answer_date):
+        elif self.conversation_state == "A-TCHER-DRFT" and (not self.answer_date):
             self.answer_date = timezone.now()
         elif self.conversation_state == "RQ-ADMIN-APPR" and (not self.re_question_date):
             self.re_question_date = timezone.now()
-        elif self.conversation_state == "RA-ADMIN-APPR" and (not self.re_answer_date):
+        elif self.conversation_state == "RA-TCHER-DRFT" and (not self.re_answer_date):
             self.re_answer_date = timezone.now()
         super().save(*args, **kwargs)
 
