@@ -7,7 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from urllib3 import HTTPResponse
 
 from .states.base import BaseState
-from .states.student import StudentHome, StudentQuestionDetail
+from .states.student import StudentHome, StudentQuestionDetail, StudentPackageManager
 from .states.admin import AdminHome, AdminQuestionDetail
 from .states.teacher import TeacherHome, TeacherQuestionDetail
 from .states.state_manager import StateManager
@@ -17,6 +17,7 @@ from epsilonvi_bot import permissions as perm
 from conversation import models as conv_models
 from bot import models as bot_models
 from billing import models as bil_models
+from billing import zarinpal as zar
 
 
 class CommandBase(BaseState):
@@ -204,6 +205,22 @@ class Help(CommandBase):
 
         return HttpResponse()
 
+class CheckPackage(CommandBase):
+    name = "check_package"
+
+    def handle(self, *args, **kwargs):
+        invoices = bil_models.Invoice.objects.filter(student_package__student=self.user.student)
+        for invoice in invoices:
+            zi = zar.Zarinpal(invoice)
+            zi.get_telegram_url()
+        next_state = StudentPackageManager(self._tlg_res, self.user)
+        check = self._set_user_state(next_state=next_state)
+        next_message = next_state.get_message()
+        next_state.send_text(next_message)
+        if check:
+            return HttpResponse("ok")
+        return HTTPResponse("nok")
+
 
 class Conversation(CommandBase):
     name = "conv"
@@ -284,6 +301,7 @@ class CommandManager(StateManager):
         ChangeTeacher.name: ChangeTeacher,
         ChangeStudent.name: ChangeStudent,
         Conversation.name: Conversation,
+        CheckPackage.name: CheckPackage,
     }
 
     def __init__(self, telegram_response_body) -> None:

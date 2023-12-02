@@ -58,7 +58,7 @@ def print_student_all_packages_detailed(user):
         text = "تا کنون بسته ای خریداری نشده.\n"
     else:
         for idx, pckg in enumerate(pckgs):
-            t = f"{idx+1}- {pckg} {pckg.purchased_date}\n"
+            t = f"{idx+1}- {pckg.display_short()}\n"
             text += t
     return text
 
@@ -427,6 +427,7 @@ class StudentPackageManager(StudentPackageBaseState):
 
     def get_message(self, chat_id=None):
         text = print_student_active_packages(self.user)
+        text += "در صورتی که بسته خریداری شده به لیست بالا اضافه نشده گزینه رو به رو را بزنید. /check_package\n"
         _list = [
             [(StudentPackageAdd.text, StudentPackageAdd.name, "")],
             [(StudentPackageHistory.text, StudentPackageHistory.name, "")],
