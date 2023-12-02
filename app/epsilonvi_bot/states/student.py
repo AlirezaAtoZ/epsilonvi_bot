@@ -385,6 +385,7 @@ class StudentPackageBaseState(StudentBaseState):
             StudentPackageAdd.name: StudentPackageAdd,
             StudentPackageInvoice.name: StudentPackageInvoice,
             StudentEditInfo.name: StudentEditInfo,
+            StudentPackageHistory.name: StudentPackageHistory,
         }
         self.expected_input_types = [self.CALLBACK_QUERY]
         self.permissions = [perm.IsStudent]
