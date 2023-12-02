@@ -130,7 +130,7 @@ class Invoice(models.Model):
         if settings.IS_DEV:
             url = f"https://epsilonvi.ir/dev/invoice/{self.pk}/verify/"
         else:
-            url = f"https://epsilonvi.ir/invoive/{self.pk}/verify/"
+            url = f"https://epsilonvi.ir/invoice/{self.pk}/verify/"
         self.callback_url = url
         self.save()
 
