@@ -7,9 +7,9 @@ from epsilonvi_bot.models import Student, Teacher, Admin
 class ConversationStateHandler:
     _conv: models.Conversation
 
-    NEW_QUESTION_TEXT = "سوال جدید /start"
-    NEW_ANSWER_TEXT = "پاسخ جدید /start"
-    NEW_REQUESTION_TEXT = "اعتراض به پاسخ دبیر /start"
+    NEW_QUESTION_TEXT = "سوال جدید {}"
+    NEW_ANSWER_TEXT = "پاسخ جدید {}"
+    NEW_REQUESTION_TEXT = "اعتراض به پاسخ دبیر {}"
 
     MORE_INFO_FORMAT = "مشاهده جزییات: {}"
 
@@ -57,7 +57,7 @@ class ConversationStateHandler:
             admins = self.__get_admins_query(perm.IsAdmin, perm.CanApproveConversation)
             users = self.__get_users_from_admins(admins)
             self._conv.student_package.save()
-            utils.send_group_message({"text": self.NEW_QUESTION_TEXT}, users)
+            utils.send_group_message({"text": self.NEW_QUESTION_TEXT.format(self._conv.get_telegram_command())}, users)
             # set the next state
             self._conv.conversation_state = "Q-STDNT-COMP"
             self._conv.save()
@@ -73,7 +73,7 @@ class ConversationStateHandler:
             teachers = subject.teacher_set.filter(is_active=True)
             if teachers.exists():
                 users = self.__get_users_from_teachers(teachers)
-                utils.send_group_message({"text": self.NEW_QUESTION_TEXT}, users)
+                utils.send_group_message({"text": self.NEW_QUESTION_TEXT.format(self._conv.get_telegram_command())}, users)
                 self._conv.conversation_state = next_state_name
                 self._conv.save()
                 return self.__result_dict(True, "ok")
@@ -137,7 +137,7 @@ class ConversationStateHandler:
         admins = self.__get_admins_query(perm.IsAdmin, perm.CanApproveConversation)
         users = self.__get_users_from_admins(admins)
         self._conv.student_package.save()
-        utils.send_group_message({"text": self.NEW_ANSWER_TEXT}, users)
+        utils.send_group_message({"text": self.NEW_ANSWER_TEXT.format(self._conv.get_telegram_command())}, users)
         # set the next state
         self._conv.conversation_state = "A-TCHER-COMP"
         self._conv.save()
@@ -224,7 +224,7 @@ class ConversationStateHandler:
         # send notification to all corresponding admins
         admins = self.__get_admins_query(perm.IsAdmin, perm.CanApproveConversation)
         users = self.__get_users_from_admins(admins)
-        utils.send_group_message({"text": self.NEW_REQUESTION_TEXT}, users)
+        utils.send_group_message({"text": self.NEW_REQUESTION_TEXT.format(self._conv.get_telegram_command())}, users)
         # set the next state
         self._conv.conversation_state = "RQ-STDNT-COMP"
         self._conv.save()
@@ -290,7 +290,7 @@ class ConversationStateHandler:
         # send notification to all corresponding admins
         admins = self.__get_admins_query(perm.IsAdmin, perm.CanApproveConversation)
         users = self.__get_users_from_admins(admins)
-        utils.send_group_message({"text": self.NEW_ANSWER_TEXT}, users)
+        utils.send_group_message({"text": self.NEW_ANSWER_TEXT.format(self._conv.get_telegram_command())}, users)
         # set the next state
         self._conv.conversation_state = "RA-TCHER-COMP"
         self._conv.save()
