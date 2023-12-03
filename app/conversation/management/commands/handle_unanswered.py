@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.core.management import BaseCommand
 
 from conversation.models import Conversation
+from conversation.handlers import ConversationStateHandler
 from bot import utils
 
 
@@ -33,9 +34,11 @@ class Command(BaseCommand):
             text = f"مکالمه {conversation.get_telegram_command()} از لیست مکالمه های شما حذف شد."
             message = {"text": text}
             utils.send_group_message(message, [conversation.teacher.user])
-            conversation.conversation_state = "Q-ADMIN-APPR"
+            # conversation.conversation_state = "Q-ADMIN-APPR"
             conversation.teacher = None
             conversation.answer.all().delete()
             conversation.answer_date = None
             conversation.save()
+            csh = ConversationStateHandler(conversation)
+            csh._handle_q_stdnt_comp(action="approve")
 
