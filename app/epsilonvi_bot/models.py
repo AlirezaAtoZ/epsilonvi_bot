@@ -3,6 +3,7 @@ import random
 import string
 
 from django.db import models
+from django.conf import settings
 from bot import models as bot_models
 from user import models as usr_models
 from epsilonvi_bot import permissions as perm
@@ -133,7 +134,7 @@ class SecretCode(models.Model):
         return f"{self.code} by {self.admin.user} for {self.usage}"
 
     def display_command(self):
-        return f"https://t.me/epsilonvibot?start=action_{self.get_usage_display()}_{self.code}"
+        return f"https://t.me/{settings.BOT_USERNAME}?start=action_{self.get_usage_display()}_{self.code}"
 
 
 class SpecialMessage(models.Model):
