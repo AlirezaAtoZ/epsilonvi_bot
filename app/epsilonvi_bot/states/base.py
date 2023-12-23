@@ -67,7 +67,7 @@ class BaseState:
         self.transition_method_name = self.TRANSITION_UPDATE
 
     def _get_error_prefix(self):
-        return f"[CUSTOM ERROR] [STATE {self.name=}]:\t"
+        return f"[CUSTOM ERROR][{str(datetime.now())}][STATE {self.name=}]:\t"
 
     def _set_data_type(self):
         if "callback_query" in self._tlg_res.keys():
