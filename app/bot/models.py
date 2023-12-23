@@ -113,7 +113,7 @@ class State(models.Model):
         logger = logging.getLogger(__name__)
         for _ in range(2):
             try:
-                logger.error(f"{state_name}")
+                # logger.error(f"{state_name}")
                 state = cls.objects.get(name=state_name)
             except ObjectDoesNotExist as e:
                 logger.error(f"{call_command('insert_states')}")
