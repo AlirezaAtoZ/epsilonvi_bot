@@ -253,14 +253,24 @@ class Conversation(CommandBase):
             text = "شما اجازه دسترسی به این قسمت را ندارید.\n /start"
             self.send_text({"chat_id": self.chat_id, "text": text})
             return HttpResponse("nok")
-
+    
+    def _handle_unidentified_conversation_detail(self, conversation):
+        return self._handle_student_conversation_detail(conversation)
+    
+    def _handle_error(self, conversation):
+        msg = self._get_error_prefix()
+        msg += "Unidenfied user tried reach a conversation! "
+        msg += f"{conversation=} {self.user=}"
+        self.logger.error(msg)
+        return HttpResponse("nok")
+    
     def handle(self, conversation_id):
         _q = conv_models.Conversation.objects.filter(pk=conversation_id)
         if not _q.exists():
             return HttpResponse("nok")
         user_role = self.user.userstate.get_role_display()
-        method = getattr(self, f"_handle_{user_role}_conversation_detail")
-        conversation = _q[0]
+        method = getattr(self, f"_handle_{user_role}_conversation_detail", self._handle_error)
+        conversation = _q.first()
         http_response = method(conversation)
         return http_response
 

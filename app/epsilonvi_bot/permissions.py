@@ -111,5 +111,10 @@ class IsStudent(PermissionBase):
 
     def has_permission(self, user):
         if (user.student.grade != "UNKWN") and user.phone_number:
+            # but is it art?
+            # for sake of reducing bugs in the future this method is better.
+            if user.userstate.role == "UNIDF":
+                user.userstate.role = "STDNT"
+                user.userstate.save()
             return True
         return False

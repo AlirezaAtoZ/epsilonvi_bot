@@ -1,3 +1,6 @@
+import logging
+from datetime import datetime
+
 from bot import utils
 from conversation import models
 from epsilonvi_bot import permissions as perm
@@ -417,9 +420,15 @@ class ConversationStateHandler:
         else:
             return False
 
+    def _handle_error(self, action=None):
+        logger = logging.getLogger(__name__)
+        msg = f"[CUSTOM ERROR][{str(datetime.now())}][CONVERSATION STATE HANDLER]\t"
+        msg += f"{self._conv.pk=} {self._conv.conversation_state=}"
+        logger.error(msg=msg)
+
     def handle(self, action=None):
         _conv_state = self._conv.conversation_state
         _low = str(_conv_state).lower()
         _meth_name = str(_low).replace("-", "_")
-        method = getattr(self, f"_handle_{_meth_name}")
+        method = getattr(self, f"_handle_{_meth_name}", self._handle_error)
         return method(action)
