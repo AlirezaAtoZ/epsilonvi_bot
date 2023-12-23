@@ -354,19 +354,22 @@ class CommandManager(StateManager):
         else:
             return HttpResponse("nok")
         # self.command_handler = self.commands_mapping[command](self._tlg_res)
-        if user.lock:
-            return HttpResponse()
-        else:
-            http_response = HttpResponse("nok")
-            try:
-                user.lock = True
-                user.save()
-                http_response = self.command_handler.handle(action_value)
-            except Exception as err:
-                self.logger.error(err)
-            else:
-                http_response = HttpResponse("ok")
-            finally:
-                user.lock = False
-                user.save()
-                return http_response
+        # if user.lock:
+        #     return HttpResponse()
+        # else:
+        #     http_response = HttpResponse("nok")
+        #     try:
+        #         user.lock = True
+        #         user.save()
+        #         http_response = self.command_handler.handle(action_value)
+        #     except Exception as err:
+        #         self.logger.error(err)
+        #     else:
+        #         http_response = HttpResponse("ok")
+        #     finally:
+        #         user.lock = False
+        #         user.save()
+        #         return http_response
+        # # http_response = HttpResponse("nok")
+        http_response = self.command_handler.handle(action_value)
+        return http_response
