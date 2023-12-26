@@ -174,7 +174,7 @@ class Home(CommandBase):
             else:
                 http_response = self.error("invalid deep link")
             return http_response
-
+        self.logger.error(f"{self.user=}")
         return super().handle()
 
 
@@ -183,27 +183,7 @@ class Help(CommandBase):
         super().__init__(telegram_response_body, user)
 
     def handle(self, action_value=None):
-        _p = [
-            perm.IsAdmin,
-        ]
-        permissoins = json.dumps(_p)
-        admin = eps_models.Admin.objects.get(
-            user=self.user,
-        )
-        admin.permissions = permissoins
-        admin.save()
-        _q = bot_models.State.objects.filter(name="ADMIN_home")
-        if not _q.exists():
-            return HttpResponse()
-        state = _q[0]
-        self.user.userstate.state = state
-        self.user.userstate.save()
-
-        admin_home = AdminHome(self._tlg_res, self.user)
-        message = admin_home.get_message()
-        admin_home.send_text(message)
-
-        return HttpResponse()
+        return HttpResponse("ok")
 
 class CheckPackage(CommandBase):
     name = "check_package"
@@ -233,6 +213,7 @@ class Conversation(CommandBase):
     def _handle_student_conversation_detail(self, conversation):
         if conversation.student == self.user.student:
             _conv_dtl_state = StudentQuestionDetail(self._tlg_res, self.user)
+            self.logger.error(f"{_conv_dtl_state=}")
             http_response = _conv_dtl_state._handle_send_messages(
                 conversation=conversation
             )
@@ -270,7 +251,9 @@ class Conversation(CommandBase):
             return HttpResponse("nok")
         user_role = self.user.userstate.get_role_display()
         method = getattr(self, f"_handle_{user_role}_conversation_detail", self._handle_error)
+        self.logger.error(f"{method=}")
         conversation = _q.first()
+        self.logger.error(f"{conversation=}")
         http_response = method(conversation)
         return http_response
 
@@ -358,7 +341,9 @@ class CommandManager(StateManager):
     def handle(self):
         command = self._get_command()
         user, _ = self._get_or_create_user()
+        self.logger.error(f"{command=} {user=}")
         _cmd, action_value = self.get_command_class(command)
+        self.logger.error(f"{_cmd=} {action_value=}")
         if _cmd:
             self.command_handler = _cmd(self._tlg_res, user)
         else:
