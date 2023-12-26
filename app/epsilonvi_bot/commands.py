@@ -174,7 +174,7 @@ class Home(CommandBase):
             else:
                 http_response = self.error("invalid deep link")
             return http_response
-        self.logger.error(f"{self.user=}")
+        
         return super().handle()
 
 
@@ -213,7 +213,6 @@ class Conversation(CommandBase):
     def _handle_student_conversation_detail(self, conversation):
         if conversation.student == self.user.student:
             _conv_dtl_state = StudentQuestionDetail(self._tlg_res, self.user)
-            self.logger.error(f"{_conv_dtl_state=}")
             http_response = _conv_dtl_state._handle_send_messages(
                 conversation=conversation
             )
@@ -251,9 +250,7 @@ class Conversation(CommandBase):
             return HttpResponse("nok")
         user_role = self.user.userstate.get_role_display()
         method = getattr(self, f"_handle_{user_role}_conversation_detail", self._handle_error)
-        self.logger.error(f"{method=}")
         conversation = _q.first()
-        self.logger.error(f"{conversation=}")
         http_response = method(conversation)
         return http_response
 
@@ -341,9 +338,7 @@ class CommandManager(StateManager):
     def handle(self):
         command = self._get_command()
         user, _ = self._get_or_create_user()
-        self.logger.error(f"{command=} {user=}")
         _cmd, action_value = self.get_command_class(command)
-        self.logger.error(f"{_cmd=} {action_value=}")
         if _cmd:
             self.command_handler = _cmd(self._tlg_res, user)
         else:
