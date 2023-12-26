@@ -54,7 +54,10 @@ class ConversationStateHandler:
 
     def _handle_q_stdnt_drft(self, action=None):
         # increase asked questions of the package
-        check = self._conv.student_package.increase_asked()
+        if not self._conv.student_denied:
+            check = self._conv.student_package.increase_asked()
+        else:
+            check = True
         if check:
             # send notification to all corresponding adimns
             admins = self.__get_admins_query(perm.IsAdmin, perm.CanApproveConversation)
@@ -63,6 +66,7 @@ class ConversationStateHandler:
             utils.send_group_message({"text": self.NEW_QUESTION_TEXT.format(self._conv.get_telegram_command())}, users)
             # set the next state
             self._conv.conversation_state = "Q-STDNT-COMP"
+            self._conv.student_denied = False
             self._conv.save()
             return self.__result_dict(True, "ok")
         else:
@@ -78,6 +82,7 @@ class ConversationStateHandler:
                 users = self.__get_users_from_teachers(teachers)
                 utils.send_group_message({"text": self.NEW_QUESTION_TEXT.format(self._conv.get_telegram_command())}, users)
                 self._conv.conversation_state = next_state_name
+                self._conv.student_denied = False
                 self._conv.save()
                 return self.__result_dict(True, "ok")
 
@@ -89,12 +94,14 @@ class ConversationStateHandler:
                 )
                 utils.send_group_message({"text": text}, users)
                 self._conv.conversation_state = next_state_name
+                self._conv.student_denied = False
                 self._conv.save()
                 return self.__result_dict(True, "ok")
 
         elif action == "deny":
             next_state_name = "Q-ADMIN-DENY"
             self._conv.conversation_state = next_state_name
+            # self._conv.student_denied = True
             self._conv.save()
             return self.__result_dict(True, "ok")
         else:
@@ -131,7 +138,7 @@ class ConversationStateHandler:
     def _handle_q_stdnt_dend(self, action=None):
         # set the next state and denied status
         self._conv.conversation_state = "Q-STDNT-DRFT"
-        self._conv.student_denied = False
+        # self._conv.student_denied = False
         self._conv.save()
         return self.__result_dict(True, "ok")
 
@@ -143,6 +150,7 @@ class ConversationStateHandler:
         utils.send_group_message({"text": self.NEW_ANSWER_TEXT.format(self._conv.get_telegram_command())}, users)
         # set the next state
         self._conv.conversation_state = "A-TCHER-COMP"
+        self._conv.teacher_denied = False
         self._conv.save()
         return self.__result_dict(True, "ok")
 
@@ -157,11 +165,13 @@ class ConversationStateHandler:
             # set the next state
             next_state_name = "A-ADMIN-APPR"
             self._conv.conversation_state = next_state_name
+            self._conv.teacher_denied = False
             self._conv.save()
             return self.__result_dict(True, "ok")
         elif action == "deny":
             next_state_name = "A-ADMIN-DENY"
             self._conv.conversation_state = next_state_name
+            # self._conv.teacher_denied = True
             self._conv.save()
             return self.__result_dict(True, "ok")
         else:
@@ -195,7 +205,7 @@ class ConversationStateHandler:
         text += self.MORE_INFO_FORMAT.format(self._conv.get_telegram_command())
         utils.send_group_message({"text": text}, [teacher.user])
         # set the next state and denied status
-        self._conv.conversation_state = "A-TCHER-COMP"
+        self._conv.conversation_state = "A-ADMIN-COMP"
         self._conv.teacher_denied = True
         self._conv.save()
         return self.__result_dict(True, "ok")
@@ -208,7 +218,7 @@ class ConversationStateHandler:
 
     def _handle_a_tcher_dend(self, action=None):
         self._conv.conversation_state = "A-TCHER-DRFT"
-        self._conv.teacher_denied = False
+        # self._conv.teacher_denied = False
         self._conv.save()
         return self.__result_dict(True, "ok")
 
@@ -237,6 +247,7 @@ class ConversationStateHandler:
         if action == "approve":
             # set the next state
             self._conv.conversation_state = "RQ-ADMIN-APPR"
+            self._conv.student_denied = False
             self._conv.save()
             # send notification to the teacher
             teacher = self._conv.teacher
@@ -249,6 +260,7 @@ class ConversationStateHandler:
         elif action == "deny":
             # set next state
             self._conv.conversation_state = "RQ-ADMIN-DENY"
+            # self._conv.student_denied = True
             self._conv.save()
             return self.__result_dict(True, "ok")
         else:
@@ -274,6 +286,7 @@ class ConversationStateHandler:
         utils.send_group_message({"text": text}, [student.user])
         # set the next state
         self._conv.conversation_state = "RQ-ADMIN-COMP"
+        self._conv.student_denied = True
         self._conv.save()
         return self.__result_dict(True, "ok")
 
@@ -296,6 +309,7 @@ class ConversationStateHandler:
         utils.send_group_message({"text": self.NEW_ANSWER_TEXT.format(self._conv.get_telegram_command())}, users)
         # set the next state
         self._conv.conversation_state = "RA-TCHER-COMP"
+        self._conv.teacher_denied = False
         self._conv.save()
         return self.__result_dict(True, "ok")
 
@@ -304,6 +318,7 @@ class ConversationStateHandler:
             # set the next state
             next_state_name = "RA-ADMIN-APPR"
             self._conv.conversation_state = next_state_name
+            self._conv.teacher_denied = False
             self._conv.save()
             # send notification to the student
             student = self._conv.student
@@ -315,6 +330,7 @@ class ConversationStateHandler:
         elif action == "deny":
             next_state_name = "RA-ADMIN-DENY"
             self._conv.conversation_state = next_state_name
+            # self._conv.teacher_denied = True
             self._conv.save()
             return self.__result_dict(True, "ok")
         else:
@@ -357,7 +373,7 @@ class ConversationStateHandler:
 
     def _handle_ra_tcher_dend(self, action=None):
         self._conv.conversation_state = "RA-TCHER-DRFT"
-        self._conv.teacher_denied = False
+        # self._conv.teacher_denied = False
         self._conv.save()
         return self.__result_dict(True, "ok")
 
@@ -384,12 +400,20 @@ class ConversationStateHandler:
         else:
             return False
 
-    def is_student_denied(self):
-        _true_states = ["Q-STDNT-DEND"]
-        if self._conv.conversation_state in _true_states:
+    def is_teacher_denied(self):
+        if self._conv.teacher_denied:
             return True
-        else:
-            return False
+        return False
+
+    def is_student_denied(self):
+        if self._conv.student_denied:
+            return True
+        return False
+        # _true_states = ["Q-STDNT-DEND"]
+        # if self._conv.conversation_state in _true_states:
+        #     return True
+        # else:
+        #     return False
 
     def is_waiting_on_teacher(self):
         _true_states = [

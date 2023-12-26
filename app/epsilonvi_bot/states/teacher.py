@@ -467,8 +467,7 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
                 _m = conversation.denied_responses.all().last()
                 text += _m.text
             elif (
-                conversation.conversation_state == "RA-TCHER-DEND"
-                and conversation.teacher_denied
+                _ch.is_teacher_denied()
             ):
                 re_write_btn = [
                     self.TEACHER_REWRITE_TEXT,
@@ -476,7 +475,7 @@ class TeacherQuestionDetail(ConversationDetailMixin, TeacherQuestionBaseState):
                     {"c_id": conversation.pk, "action": "dend_ra"},
                 ]
                 _list.append([re_write_btn])
-                text = "توضیحات ادمین\n"
+                text = "توضیحات ادمین:\n"
                 _m = conversation.denied_responses.all().last()
                 text += _m.text
 

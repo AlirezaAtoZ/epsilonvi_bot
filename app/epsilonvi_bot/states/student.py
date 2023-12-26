@@ -1045,24 +1045,34 @@ class StudentQuestionDetail(ConversationDetailMixin, StudentQuestionBaseState):
         # if the question has denied by admin add admin response and re-write btn
         if _conv_hand.is_student_denied():
             # admin response text btns
-            text = "توضیحات ادمین:\n"
-            _m = conversation.denied_responses.all().last()
-            text += _m.text
-            btn = [
-                self.STUDENT_REWRITE_TEXT,
-                StudentQuestionCompose.name,
-                {"conversation": conversation.pk, "action": "re_write"},
-            ]
-            _list = [[btn]]
-            inline_btns = self._get_inline_keyboard_list(_list)
-            message = self._get_message_dict(
-                chat_id=chat_id, text=text, inline_keyboard=inline_btns
-            )
+            # just get the last response message to avoid teacher responses be shown to student or vice versa
+            if conversation.denied_responses.exists():
+                text = "توضیحات ادمین:\n"
+                _m = conversation.denied_responses.all().last()
+                text += _m.text
+                message = self._get_message_dict(
+                    chat_id=chat_id, text=text, inline_keyboard=inline_btns
+                )
+            if not conversation.answer.exists():  # Question denied so edit is available
+                btn = [
+                    self.STUDENT_REWRITE_TEXT,
+                    StudentQuestionCompose.name,
+                    {"conversation": conversation.pk, "action": "re_write"},
+                ]
+                _list = [[btn]]
+                inline_btns = self._get_inline_keyboard_list(_list) + inline_btns
+                message = self._get_message_dict(
+                    chat_id=chat_id, text=text, inline_keyboard=inline_btns
+                )
+            else:  # Re-Question denied so edit is not available
+                message = self._get_message_dict(
+                    chat_id=chat_id, text=text, inline_keyboard=inline_btns
+                )
             # add denied message to the conversations messages
             # messages.append({"message_type": "text", "message": message})
         # elif conversation is answerded and student can deny the teacher answer
         # add the "Understand" and "objection" btn to the last message
-        elif _conv_hand.is_waiting_on_student():
+        elif _conv_hand.is_waiting_on_student() or conversation.conversation_state in ["RQ-STDNT-DENY", "RQ-STDNT-DRFT"]:
             btn_appr = [
                 "متوجه شدم",
                 StudentQuestionManager.name,
@@ -1075,9 +1085,13 @@ class StudentQuestionDetail(ConversationDetailMixin, StudentQuestionBaseState):
             ]
             _list = [[btn_appr], [btn_dny]]
             inline_btns = self._get_inline_keyboard_list(_list) + inline_btns
-        message = self._get_message_dict(
-            text=text, inline_keyboard=inline_btns, chat_id=chat_id
-        )
+            message = self._get_message_dict(
+                text=text, inline_keyboard=inline_btns, chat_id=chat_id
+            )
+        else:
+            message = self._get_message_dict(
+                text=text, inline_keyboard=inline_btns, chat_id=chat_id
+            )
         # add the last message to the conversation messages
         messages.append({"message_type": "text", "message": message})
         return messages
@@ -1110,7 +1124,9 @@ class StudentQuestionDetail(ConversationDetailMixin, StudentQuestionBaseState):
                 _conv_handle._handle_a_admin_appr(
                     "deny"
                 )  # A-ADMIN-APPR -> A-STDNT-DENY
-                _conv_handle.handle()  # A-STDNT-DENY -> RQ-STDNT-DRFT
+                # _conv_handle.handle()  # A-STDNT-DENY -> RQ-STDNT-DRFT
+                _conv_handle._handle_a_admin_appr(action="deny")
+                _conv_handle._handle_a_stdnt_deny()
                 get_message_kwargs = {"conversation": conversation}
             elif (
                 conversation
