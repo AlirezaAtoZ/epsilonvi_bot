@@ -144,18 +144,25 @@ class StateManager(object):
             return HttpResponse("Something went wrong")
 
         # self.logger.error(f"state handler {user}")
-        # TODO do it with RAM
-        if user.lock:
-            return HttpResponse()
-        else:
-            try:
-                user.lock = True
-                user.save()
-                http_response = self.current_state(self._tlg_res, user).handle()
-            except:
-                self.logger.error(traceback.print_exc())
-                return HttpResponse()
-            finally:
-                user.lock = False
-                user.save()
+        # # TODO do it with RAM
+        # if user.lock:
+        #     return HttpResponse()
+        # else:
+        #     try:
+        #         user.lock = True
+        #         user.save()
+        #         http_response = self.current_state(self._tlg_res, user).handle()
+        #     except:
+        #         self.logger.error(traceback.print_exc())
+        #         return HttpResponse()
+        #     finally:
+        #         user.lock = False
+        #         user.save()
+        try:
+            http_response = self.current_state(self._tlg_res, user).handle()
+        except Exception as e:
+            msg = self._get_error_prefix()
+            msg += f"error {e}"
+            self.logger.error(msg)
+            return HttpResponse("nok")
         return http_response
