@@ -95,7 +95,8 @@ class Student(models.Model):
         convs = self.get_draft_re_questions()
         for c in convs:
             c.conversation_state = "A-ADMIN-APPR"
-            c.re_question.delete()
+            if c.re_question.exists():
+                c.re_question.clear()
             c.save()
 
 
