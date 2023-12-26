@@ -106,7 +106,7 @@ class State(models.Model):
     role = models.CharField(max_length=5, choices=ROLES, default="UNIDF")
 
     def __str__(self) -> str:
-        return f"{self.role} {self.name}"
+        return f"{self.name}"
 
     @classmethod
     def get_state(cls, state_name):
@@ -138,7 +138,7 @@ class UserState(models.Model):
     message_ids = models.TextField(null=True, blank=True)
 
     def __str__(self) -> str:
-        return f"{self.user} {self.state}"
+        return f"{self.user} {self.role} {self.state}"
 
 
 class CompactDictionary(models.Model):
